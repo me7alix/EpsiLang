@@ -1,26 +1,18 @@
 #ifndef TYPE_H
 #define TYPE_H
 
-#include <stdlib.h>
 #include <stdbool.h>
 
 typedef enum {
+	TYPE_NULL,
 	TYPE_INT,
 	TYPE_FLOAT,
+	TYPE_BOOL,
+	TYPE_ARR,
 } TypeKind;
 
 typedef struct {
 	TypeKind kind;
-
-	union {
-		struct {
-			bool is_signed;
-			size_t size;
-		} tint;
-		struct {
-			size_t size;
-		} tfloat;
-	} as;
 } Type;
 
 #endif

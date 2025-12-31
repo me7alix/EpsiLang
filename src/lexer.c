@@ -3,7 +3,6 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <ctype.h>
-
 #include "../include/lexer.h"
 #include "../3dparty/cplus.h"
 
@@ -91,14 +90,11 @@ struct {
 	{ "while",    TOK_WHILE_SYM },
 	{ "if",       TOK_IF_SYM    },
 	{ "else",     TOK_ELSE_SYM  },
-	{ "struct",   TOK_STRUCT    },
 	{ "extern",   TOK_EXTERN    },
 	{ "true",     TOK_TRUE      },
 	{ "false",    TOK_FALSE     },
 	{ "break",    TOK_BREAK     },
 	{ "continue", TOK_CONTINUE  },
-	{ "null",     TOK_NULL      },
-	{ "sizeof",   TOK_SIZEOF    },
 	{ "return",   TOK_RET       },
 	{ "import",   TOK_IMPORT    },
 	{ "fn",       TOK_FUNC      },
@@ -106,6 +102,9 @@ struct {
 
 Token lexer_next(Lexer *l) {
 	Token ret;
+	l->cur_loc.line_char = l->cur_char;
+	ret.loc = l->cur_loc;
+
 	switch (*l->cur_char) {
 		case ' ': case '\t':
 			l->cur_char++;
@@ -233,6 +232,9 @@ Token lexer_next(Lexer *l) {
 
 			l->cur_loc.line_num++;
 			l->cur_loc.line_start = l->cur_char + 1;
+
+			l->cur_char++;
+			return lexer_next(l);
 		} break;
 
 		case ':': {
@@ -261,7 +263,7 @@ Token lexer_next(Lexer *l) {
 				char *num = malloc(sizeof(char) * (len+1));
 				memcpy(num, start, len); num[len] = '\0';
 				if (isFloat) ret = token(l, TOK_FLOAT, num);
-				ret = token(l, TOK_INT, num);
+				else         ret = token(l, TOK_INT, num);
 			}
 
 			else if (*(l->cur_char) == '"') {
@@ -311,9 +313,10 @@ Token lexer_next(Lexer *l) {
 
 			else if (isalpha(*l->cur_char)) {
 				for (size_t i = 0; i < ARR_LEN(keywordPairs); i++) {
-					if (is_tok(l, keywordPairs[i].id)) {
-						ret = token(l, keywordPairs[i].kind, (char *) keywordPairs[i].id);
-						for (size_t i = 0; i < strlen(keywordPairs[i].id)-1; i++) l->cur_char++;
+					const char *kp = keywordPairs[i].id;
+					if (is_tok(l, kp)) {
+						ret = token(l, keywordPairs[i].kind, (char*)kp);
+						for (size_t i = 0; i < strlen(kp)-1; i++) l->cur_char++;
 						goto exit;
 					}
 				}
@@ -327,7 +330,6 @@ Token lexer_next(Lexer *l) {
 
 exit:
 	l->cur_char++;
-	ret.loc = l->cur_loc;
 	return ret;
 }
 
