@@ -42,18 +42,28 @@ long long parse_int(char *data) {
 uint ast_op_precedence(AST_Op op, bool l) {
 	switch (op) {
 		case AST_OP_EQ:
-			return l ? 10 : 11;
+			return l ? 11 : 10;
+		case AST_OP_AND:
+		case AST_OP_OR:
+			return l ? 16 : 15;
+		case AST_OP_NOT_EQ:
+		case AST_OP_IS_EQ:
+		case AST_OP_GREAT:
+		case AST_OP_GREAT_EQ:
+		case AST_OP_LESS:
+		case AST_OP_LESS_EQ:
+			return l ? 21 : 20;
 		case AST_OP_SUB:
 		case AST_OP_ADD:
-			return l ? 21 : 20;
+			return l ? 71 : 70;
 		case AST_OP_MUL:
 		case AST_OP_DIV:
-			return l ? 31 : 30;
+			return l ? 81 : 80;
+		case AST_OP_ARR:
+			return l ? 101 : 100;
 		default: return 0;
 	}
 }
-
-extern void ast_print(AST *n, int spaces);
 
 AST *parse_expand(ASTs *nodes) {
 	for (size_t i = 0; i < nodes->count; i++) {
@@ -91,11 +101,50 @@ typedef enum {
 	PARSE_EXPR_SEMI,
 	PARSE_EXPR_CPAR,
 	PARSE_EXPR_ARGS,
+	PARSE_EXPR_OBRA,
+	PARSE_EXPR_SQBRA,
 } ParseExprKind;
 
 AST *parse_expr(Parser *p, ParseExprKind pek);
 
+AST *parse_list(Parser *p) {
+	AST *ln = ast({
+		.kind = AST_LIST,
+		.as.list = {0},
+	});
+
+	if (peek2(p).kind == TOK_CSQBRA) {
+		next(p);
+		return ln;
+	}
+	
+	next(p);
+	for (;;) {
+		switch (peek(p).kind) {
+			case TOK_CSQBRA: goto exit;
+
+			case TOK_COM: {
+				if(peek2(p).kind == TOK_COM)
+					lexer_error(peek(p).loc, "error: too many coms");
+				next(p);
+			} break;
+
+			default: {
+				AST *expr = parse_expr(p, PARSE_EXPR_ARGS);
+				da_append(&ln->as.list, expr);
+			} break;
+		}
+	}
+
+exit:
+	return ln;
+}
+
 AST *parse_func_call(Parser *p) {
+	Symbol *sf = symbol_stack_get(&p->stack, peek(p));
+	if (sf->kind != SYMBOL_FUNC)
+		lexer_error(peek(p).loc, "error: no such function");
+
 	AST *fc = ast({
 		.kind = AST_FUNC_CALL,
 		.loc = p->lexer.cur_loc,
@@ -103,25 +152,13 @@ AST *parse_func_call(Parser *p) {
 	});
 
 	next(p);
-	int par_cnt = 1;
-
 	for (;;) {
 		switch (peek(p).kind) {
+			case TOK_CPAR: goto exit;
+
 			case TOK_COM: {
 				if(peek2(p).kind == TOK_COM)
 					lexer_error(peek(p).loc, "error: too many coms");
-				next(p);
-			} break;
-
-			case TOK_OPAR: {
-				par_cnt++;
-				next(p);
-			} break;
-
-			case TOK_CPAR: {
-				par_cnt--;
-				if (par_cnt == 0)
-					goto exit;
 				next(p);
 			} break;
 
@@ -132,12 +169,27 @@ AST *parse_func_call(Parser *p) {
 		}
 	}
 
+	size_t args_cnt = fc->as.func_call.args.count;
+	if (sf->as.func.kind == FARGS_CNT_EQ    && sf->as.func.count != args_cnt ||
+		sf->as.func.kind == FARGS_CNT_GREAT && sf->as.func.count <= args_cnt)
+		lexer_error(fc->loc, "error: wrong amount of arguments");
 
 exit:
 	return fc;
 }
 
 AST *parse_body(Parser *p, bool isProg);
+
+AST *parse_if_stmt(Parser *p) {
+	AST *ifst = ast({
+		.kind = AST_ST_IF,
+		.loc = next(p).loc,
+	});
+
+	ifst->as.st_if.cond = parse_expr(p, PARSE_EXPR_OBRA);
+	ifst->as.st_if.body = parse_body(p, false);
+	return ifst;
+}
 
 AST *parse_func_def(Parser *p) {
 	next(p);
@@ -158,10 +210,13 @@ AST *parse_func_def(Parser *p) {
 				if(peek2(p).kind == TOK_COM)
 					lexer_error(peek(p).loc, "error: too many coms");
 				break;
+
 			case TOK_ID:
 				da_append(&fd->as.func_def.args, peek(p).data);
 				break;
-			default: lexer_error(peek(p).loc, "error: wrong func args");
+
+			default:
+				lexer_error(peek(p).loc, "error: wrong func args");
 		}
 
 		next(p);
@@ -172,7 +227,8 @@ AST *parse_func_def(Parser *p) {
 	symbol_stack_add(&p->stack, (Symbol){
 		.kind = SYMBOL_FUNC,
 		.id = fd->as.func_def.id,
-		.as.func_args_cnt = fd->as.func_def.args.count,
+		.as.func.kind = FARGS_CNT_EQ,
+		.as.func.count = fd->as.func_def.args.count,
 	});
 
 	size_t stack_cnt = p->stack.count;
@@ -198,10 +254,32 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 			if (peek(p).kind == TOK_CPAR) break;
 		} else if (pek == PARSE_EXPR_ARGS) {
 			if (peek(p).kind == TOK_COM ||
+				peek(p).kind == TOK_CSQBRA ||
 				peek(p).kind == TOK_CPAR) break;
+		} else if (pek == PARSE_EXPR_OBRA) {
+			if (peek(p).kind == TOK_OBRA) break;
+		} else if (pek == PARSE_EXPR_SQBRA) {
+			if (peek(p).kind == TOK_CSQBRA) break;
 		}
 
 		switch (peek(p).kind) {
+			case TOK_OSQBRA: {
+				if (nodes.count) {
+					if (da_last(&nodes)->kind == AST_VAR) {
+						da_append(&nodes, ast({
+							.kind = AST_BIN_EXPR,
+							.as.bin_expr.op = AST_OP_ARR,
+						}));
+
+						next(p);
+						da_append(&nodes, parse_expr(p, PARSE_EXPR_SQBRA));
+						break;
+					}
+				}
+
+				da_append(&nodes, parse_list(p));
+			} break;
+
 			case TOK_OPAR: {
 				next(p);
 				da_append(&nodes, parse_expr(p, PARSE_EXPR_CPAR));
@@ -215,7 +293,6 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 					da_append(&nodes, ast({
 						.kind = AST_VAR,
 						.loc = peek(p).loc,
-						.type = vs->as.var_type,
 						.as.var = peek(p).data,
 					}));
 				}
@@ -225,9 +302,8 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 				da_append(&nodes, ast({
 					.kind = AST_LIT,
 					.loc = peek(p).loc,
-					.type = (Type){.kind = TYPE_INT},
 					.as.lit.kind = LITERAL_INT,
-					.as.lit.as.int_val = parse_int(peek(p).data),
+					.as.lit.as.vint = parse_int(peek(p).data),
 				}));
 			} break;
 
@@ -235,25 +311,28 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 				da_append(&nodes, ast({
 					.kind = AST_LIT,
 					.loc = peek(p).loc,
-					.type = (Type){.kind = TYPE_FLOAT},
 					.as.lit.kind = LITERAL_FLOAT,
-					.as.lit.as.float_val = parse_float(peek(p).data),
+					.as.lit.as.vfloat = parse_float(peek(p).data),
 				}));
 			} break;
 
+			case TOK_EQ_EQ: case TOK_AND:
 			case TOK_PLUS: case TOK_MINUS:
 			case TOK_STAR: case TOK_SLASH:
-			case TOK_EQ: {
+			case TOK_EQ: case TOK_OR: {
 				TokenKind tk = peek(p).kind;
 				da_append(&nodes, ast({
 					.kind = AST_BIN_EXPR,
 					.loc = peek(p).loc,
 					.as.bin_expr.op =
-						tk == TOK_EQ    ? AST_OP_EQ  :
-						tk == TOK_PLUS  ? AST_OP_ADD :
-						tk == TOK_MINUS ? AST_OP_SUB :
-						tk == TOK_STAR  ? AST_OP_MUL :
-						tk == TOK_SLASH ? AST_OP_DIV : 0,
+						tk == TOK_EQ_EQ ? AST_OP_IS_EQ :
+						tk == TOK_AND   ? AST_OP_AND   :
+						tk == TOK_OR    ? AST_OP_OR    :
+						tk == TOK_EQ    ? AST_OP_EQ    :
+						tk == TOK_PLUS  ? AST_OP_ADD   :
+						tk == TOK_MINUS ? AST_OP_SUB   :
+						tk == TOK_STAR  ? AST_OP_MUL   :
+						tk == TOK_SLASH ? AST_OP_DIV   : 0,
 				}));
 			} break;
 
@@ -290,7 +369,6 @@ AST *parse_var_def_assign(Parser *p) {
 	symbol_stack_add(&p->stack, (Symbol){
 		.kind = SYMBOL_VAR,
 		.id = vd->as.var_def.id,
-		.as.var_type = (Type){0},
 	});
 	return vd;
 }
@@ -329,7 +407,12 @@ AST *parse_body(Parser *p, bool isProg) {
 				da_append(&body->as.body, parse_func_ret(p));
 			} break;
 
-			default: lexer_error(peek(p).loc, "error: unknown body level declaration");
+			case TOK_IF_SYM: {
+				da_append(&body->as.body, parse_if_stmt(p));
+			} break;
+
+			default:
+				lexer_error(peek(p).loc, "error: unknown body level declaration");
 		}
 
 		next(p);

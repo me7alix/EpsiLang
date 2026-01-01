@@ -1,9 +1,0 @@
-fn len(x, y) {
-	fn sq(v) {
-		return v * v;
-	}
-
-	return sqrt(sq(x) + sq(y));
-}
-
-print(len(1, 1));

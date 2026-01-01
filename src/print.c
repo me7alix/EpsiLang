@@ -1,0 +1,107 @@
+#include <stdio.h>
+#include <assert.h>
+#include "../include/lexer.h"
+#include "../include/parser.h"
+
+void lexer_print(Lexer l) {
+	while (lexer_peek(&l).kind) {
+		Token t = lexer_next(&l);
+		printf("%02i %s\n", t.kind, t.data);
+	}
+}
+
+void print_spaces(int spaces) {
+	for (int i = 0; i < spaces; i++) printf(" ");
+}
+
+void ast_print(AST *n, int spaces) {
+	const int gap = 2;
+	print_spaces(spaces);
+
+	switch (n->kind) {
+		case AST_PROG: {
+			printf("prog:\n");
+			ast_print(n->as.prog.body, spaces + gap);
+		} break;
+
+		case AST_BODY: {
+			printf("body:\n");
+			da_foreach (AST*, it, &n->as.body)
+			ast_print(*it, spaces + gap);
+		} break;
+
+		case AST_LIT: {
+			switch (n->as.lit.kind) {
+				case LITERAL_INT:
+					printf("int(%lli)\n", n->as.lit.as.vint);
+					break;
+				case LITERAL_FLOAT:
+					printf("float(%lf)\n", n->as.lit.as.vfloat);
+					break;
+				case LITERAL_BOOL:
+					printf("bool(%s)\n", n->as.lit.as.vbool ? "true" : "false");
+					break;
+			}
+		} break;
+
+		case AST_VAR: {
+			printf("var(%s)\n", n->as.var);
+		} break;
+
+		case AST_VAR_DEF: {
+			printf("var_def(%s):\n", n->as.var_def.id);
+			ast_print(n->as.var_def.expr, spaces + gap);
+		} break;
+
+		case AST_VAR_MUT: {
+			printf("var_mut:\n");
+			ast_print(n->as.var_mut, spaces + gap);
+		} break;
+
+		case AST_FUNC_DEF: {
+			printf("func_def(");
+			da_foreach (char*, it, &n->as.func_def.args) {
+				printf("%s", *it);
+				if (it - n->as.func_def.args.items != n->as.func_def.args.count - 1)
+					printf(", ");
+			}
+			printf("):\n");
+			ast_print(n->as.func_def.body, spaces + gap);
+		} break;
+
+		case AST_BIN_EXPR: {
+			int bop = n->as.bin_expr.op;
+			printf("bin_expr(%s):\n",
+				bop == AST_OP_EQ     ? "="  :
+				bop == AST_OP_IS_EQ  ? "==" :
+				bop == AST_OP_NOT_EQ ? "!=" :
+				bop == AST_OP_AND    ? "&&" :
+				bop == AST_OP_OR     ? "||" :
+				bop == AST_OP_ADD    ? "+"  :
+				bop == AST_OP_SUB    ? "-"  :
+				bop == AST_OP_MUL    ? "*"  :
+				bop == AST_OP_DIV    ? "/"  : "E");
+			ast_print(n->as.bin_expr.lhs, spaces + gap);
+			ast_print(n->as.bin_expr.rhs, spaces + gap);
+		} break;
+
+		case AST_RET: {
+			printf("return:\n");
+			ast_print(n->as.ret.expr, spaces + gap);
+		} break;
+
+		case AST_FUNC_CALL: {
+			printf("func_call(%s):\n", n->as.func_call.id);
+			da_foreach (AST*, it, &n->as.func_call.args)
+			ast_print(*it, spaces + gap);
+		} break;
+
+		case AST_ST_IF: {
+			printf("st_if:\n");
+			ast_print(n->as.st_if.cond, spaces + gap);
+			ast_print(n->as.st_if.body, spaces + gap);
+		} break;
+
+		default: assert(0);
+	}
+}

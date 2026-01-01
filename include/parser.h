@@ -2,8 +2,8 @@
 #define PARSER_H
 
 #include "lexer.h"
-#include "type.h"
 #include "../3dparty/cplus.h"
+#include <stdbool.h>
 
 typedef enum {
 	AST_OP_EQ,
@@ -15,7 +15,11 @@ typedef enum {
 	AST_OP_IS_EQ,
 	AST_OP_GREAT,
 	AST_OP_GREAT_EQ,
+	AST_OP_LESS,
 	AST_OP_LESS_EQ,
+	AST_OP_AND,
+	AST_OP_OR,
+	AST_OP_ARR,
 } AST_Op;
 
 typedef struct {
@@ -26,10 +30,16 @@ typedef struct {
 	} kind;
 
 	union {
-		double float_val;
-		long long int_val;
+		double vfloat;
+		long long vint;
+		bool vbool;
 	} as;
 } Literal;
+
+typedef enum {
+	FARGS_CNT_EQ,
+	FARGS_CNT_GREAT,
+} FuncArgsKind;
 
 typedef struct {
 	enum {
@@ -39,8 +49,10 @@ typedef struct {
 	char *id;
 
 	union {
-		Type var_type;
-		size_t func_args_cnt;
+		struct {
+			FuncArgsKind kind;
+			size_t count;
+		} func;
 	} as;
 } Symbol;
 
@@ -59,6 +71,7 @@ struct AST {
 		AST_VAR,
 		AST_VAR_DEF,
 		AST_VAR_MUT,
+		AST_LIST,
 		AST_FUNC_DEF,
 		AST_FUNC_CALL,
 		AST_ST_WHILE,
@@ -71,7 +84,6 @@ struct AST {
 	} kind;
 
 	Location loc;
-	Type type;
 
 	union {
 		struct {
@@ -106,6 +118,7 @@ struct AST {
 		AST *var_mut;
 		ASTs body;
 		Literal lit;
+		ASTs list;
 	} as;
 };
 

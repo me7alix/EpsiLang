@@ -1,0 +1,19 @@
+fn fact(n) {
+	fn one_or_zero(n) {
+		return n == 1 || n == 0;
+	}
+
+	if one_or_zero(n) {
+		return 1;
+	}
+
+	return n * fact(n - 1);
+}
+
+nums := [1, 2];
+
+append(nums, fact(3), fact(4), 5);
+print(nums);
+
+nums[1] = 777;
+print(nums);
