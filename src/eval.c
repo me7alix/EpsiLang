@@ -152,7 +152,9 @@ Val eval(EvalCtx *ctx, AST *n) {
 			size_t stack_size = ctx->stack.count;
 			da_foreach (AST*, it, &n->as.body) {
 				Val res = eval(ctx, *it);
-				if (ctx->state == EPSL_EXEC_CTX_RET) {
+				if (ctx->state == EXEC_CTX_RET ||
+					ctx->state == EXEC_CTX_CONT ||
+					ctx->state == EXEC_CTX_BREAK) {
 					ctx->stack.count = stack_size;
 					return res;
 				}
@@ -176,16 +178,19 @@ Val eval(EvalCtx *ctx, AST *n) {
 						.kind = VAL_INT,
 						.as.vint = n->as.lit.as.vint,
 					};
+
 				case LITERAL_FLOAT:
 					return (Val){
 						.kind = VAL_FLOAT,
 						.as.vfloat = n->as.lit.as.vfloat,
 					};
+
 				case LITERAL_BOOL:
 					return (Val){
 						.kind = VAL_BOOL,
 						.as.vbool = n->as.lit.as.vbool,
 					};
+
 				case LITERAL_STR: {
 					StringBuilder *str = malloc(sizeof(*str));
 					*str = (StringBuilder){0};
@@ -196,6 +201,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 						.as.str = str,
 					};
 				} break;
+
 				default: assert(0);
 			}
 		} break;
@@ -275,7 +281,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 		} break;
 
 		case AST_ST_ELSE: {
-			eval(ctx, n->as.st_else.body);
+			return eval(ctx, n->as.st_else.body);
 		} break;
 
 		case AST_ST_IF: {
@@ -283,13 +289,11 @@ Val eval(EvalCtx *ctx, AST *n) {
 			if (cond.kind != VAL_BOOL)
 				lexer_error(n->loc, "error: boolean expected");
 
-			if (cond.as.vbool) {
-				eval(ctx, n->as.st_if_chain.body);
-				return (Val){0};
-			}
+			if (cond.as.vbool)
+				return eval(ctx, n->as.st_if_chain.body);
 
 			if (n->as.st_if_chain.chain)
-				eval(ctx, n->as.st_if_chain.chain);
+				return eval(ctx, n->as.st_if_chain.chain);
 		} break;
 
 		case AST_ST_WHILE: {
@@ -297,8 +301,16 @@ Val eval(EvalCtx *ctx, AST *n) {
 			if (cond.kind != VAL_BOOL)
 				lexer_error(n->loc, "error: boolean expected");
 
-			while (cond.as.vbool)
-				eval(ctx, n->as.st_while.body);
+			while (cond.as.vbool) {
+				Val res = eval(ctx, n->as.st_while.body);
+				if (ctx->state == EXEC_CTX_BREAK) {
+					ctx->state = EXEC_CTX_NONE; break;
+				} else if (ctx->state == EXEC_CTX_CONT) {
+					ctx->state = EXEC_CTX_NONE;
+				} else if (ctx->state == EXEC_CTX_RET) {
+					return res;
+				}
+			}
 		} break;
 
 		case AST_FUNC_CALL: {
@@ -318,9 +330,9 @@ Val eval(EvalCtx *ctx, AST *n) {
 					});
 				}
 
-				ctx->state = EPSL_EXEC_CTX_NONE;
+				ctx->state = EXEC_CTX_NONE;
 				res = eval(ctx, f->as.func.node->as.func_def.body);
-				ctx->state = EPSL_EXEC_CTX_NONE;
+				ctx->state = EXEC_CTX_NONE;
 				ctx->stack.count = stack_size;
 			} else if (f->kind == EVAL_SYMB_REG_FUNC) {
 				Vals args = {0};
@@ -334,8 +346,16 @@ Val eval(EvalCtx *ctx, AST *n) {
 
 		case AST_RET: {
 			Val v = eval(ctx, n->as.ret.expr);;
-			ctx->state = EPSL_EXEC_CTX_RET;
+			ctx->state = EXEC_CTX_RET;
 			return v;
+		} break;
+
+		case AST_BREAK: {
+			ctx->state = EXEC_CTX_BREAK;
+		} break;
+
+		case AST_CONT: {
+			ctx->state = EXEC_CTX_CONT;
 		} break;
 
 		case AST_VAR_MUT: {

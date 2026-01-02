@@ -505,6 +505,14 @@ AST *parse_body(Parser *p, bool isProg) {
 				da_append(&body->as.body, parse_while_stmt(p));
 			} break;
 
+			case TOK_BREAK: {
+				da_append(&body->as.body, ast({.kind = AST_BREAK, .loc = next(p).loc}));
+			} break;
+
+			case TOK_CONTINUE: {
+				da_append(&body->as.body, ast({.kind = AST_CONT, .loc = next(p).loc}));
+			} break;
+
 			default:
 				lexer_error(peek(p).loc, "error: unknown body level declaration");
 		}

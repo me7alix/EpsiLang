@@ -86,6 +86,8 @@ struct AST {
 		AST_BODY,
 		AST_LIT,
 		AST_RET,
+		AST_BREAK,
+		AST_CONT,
 	} kind;
 
 	Location loc;

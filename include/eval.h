@@ -53,10 +53,10 @@ typedef DA(EvalSymbol) EvalStack;
 
 typedef struct {
 	enum {
-		EPSL_EXEC_CTX_NONE,
-		EPSL_EXEC_CTX_RET,
-		EPSL_EXEC_CTX_BREAK,
-		EPSL_EXEC_CTX_CONT,
+		EXEC_CTX_NONE,
+		EXEC_CTX_RET,
+		EXEC_CTX_BREAK,
+		EXEC_CTX_CONT,
 	} state;
 
 	EvalStack stack;
