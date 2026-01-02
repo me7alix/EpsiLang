@@ -13,7 +13,9 @@ struct Val {
 		VAL_INT,
 		VAL_FLOAT,
 		VAL_BOOL,
+		VAL_STR,
 		VAL_LIST,
+		VAL_DICT,
 	} kind;
 	
 	union {
@@ -21,9 +23,12 @@ struct Val {
 		double vfloat;
 		bool vbool;
 		Vals *list;
-		char *data;
+		void *dict;
+		StringBuilder *str;
 	} as;
 };
+
+HT_DECL(ValDict, Val, Val);
 
 typedef struct {
 	enum {

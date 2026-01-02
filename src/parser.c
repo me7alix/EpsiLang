@@ -42,6 +42,7 @@ long long parse_int(char *data) {
 uint ast_op_precedence(AST_Op op, bool l) {
 	switch (op) {
 		case AST_OP_EQ:
+		case AST_OP_PAIR:
 			return l ? 11 : 10;
 		case AST_OP_AND:
 		case AST_OP_OR:
@@ -110,7 +111,7 @@ AST *parse_expr(Parser *p, ParseExprKind pek);
 AST *parse_list(Parser *p) {
 	AST *ln = ast({
 		.kind = AST_LIST,
-		.as.list = {0},
+		.as.list = NULL,
 	});
 
 	if (peek2(p).kind == TOK_CSQBRA) {
@@ -136,8 +137,46 @@ AST *parse_list(Parser *p) {
 		}
 	}
 
+
 exit:
+	expect(p, TOK_CSQBRA);
 	return ln;
+}
+
+AST *parse_dict(Parser *p) {
+	AST *dn = ast({
+		.kind = AST_DICT,
+		.as.dict = {0},
+	});
+
+	if (peek2(p).kind == TOK_CBRA) {
+		next(p);
+		return dn;
+	}
+	
+	next(p);
+	for (;;) {
+		switch (peek(p).kind) {
+			case TOK_CBRA: goto exit;
+
+			case TOK_COM: {
+				if(peek2(p).kind == TOK_COM)
+					lexer_error(peek(p).loc, "error: too many coms");
+				next(p);
+			} break;
+
+			default: {
+				AST *expr = parse_expr(p, PARSE_EXPR_ARGS);
+				if (expr->kind != AST_BIN_EXPR && expr->as.bin_expr.op != AST_OP_PAIR)
+					lexer_error(expr->loc, "error: key value pair expected");
+				da_append(&dn->as.dict, expr);
+			} break;
+		}
+	}
+
+exit:
+	expect(p, TOK_CBRA);
+	return dn;
 }
 
 AST *parse_func_call(Parser *p) {
@@ -186,9 +225,33 @@ AST *parse_if_stmt(Parser *p) {
 		.loc = next(p).loc,
 	});
 
-	ifst->as.st_if.cond = parse_expr(p, PARSE_EXPR_OBRA);
-	ifst->as.st_if.body = parse_body(p, false);
+	ifst->as.st_if_chain.cond = parse_expr(p, PARSE_EXPR_OBRA);
+	ifst->as.st_if_chain.body = parse_body(p, false);
+
+	if (peek2(p).kind == TOK_ELSE_SYM) {
+		next(p);
+
+		AST *elst = ast({
+			.kind = AST_ST_ELSE,
+			.loc = next(p).loc
+		});
+
+		elst->as.st_else.body = parse_body(p, false);
+		ifst->as.st_if_chain.chain = elst;
+	}
+
 	return ifst;
+}
+
+AST *parse_while_stmt(Parser *p) {
+	AST *wst = ast({
+		.kind = AST_ST_WHILE,
+		.loc = next(p).loc,
+	});
+
+	wst->as.st_while.cond = parse_expr(p, PARSE_EXPR_OBRA);
+	wst->as.st_while.body = parse_body(p, false);
+	return wst;
 }
 
 AST *parse_func_def(Parser *p) {
@@ -255,6 +318,7 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 		} else if (pek == PARSE_EXPR_ARGS) {
 			if (peek(p).kind == TOK_COM ||
 				peek(p).kind == TOK_CSQBRA ||
+				peek(p).kind == TOK_CBRA ||
 				peek(p).kind == TOK_CPAR) break;
 		} else if (pek == PARSE_EXPR_OBRA) {
 			if (peek(p).kind == TOK_OBRA) break;
@@ -278,6 +342,29 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 				}
 
 				da_append(&nodes, parse_list(p));
+			} break;
+
+			case TOK_STRING: {
+				da_append(&nodes, ast({
+					.kind = AST_LIT,
+					.loc = peek(p).loc,
+					.as.lit.kind = LITERAL_STR,
+					.as.lit.as.vstr = peek(p).data,
+				}));
+			} break;
+
+			case TOK_FALSE:
+			case TOK_TRUE: {
+				da_append(&nodes, ast({
+					.kind = AST_LIT,
+					.loc = peek(p).loc,
+					.as.lit.kind = LITERAL_BOOL,
+					.as.lit.as.vbool = peek(p).kind == TOK_TRUE,
+				}));
+			} break;
+
+			case TOK_OBRA: {
+				da_append(&nodes, parse_dict(p));
 			} break;
 
 			case TOK_OPAR: {
@@ -319,12 +406,14 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 			case TOK_EQ_EQ: case TOK_AND:
 			case TOK_PLUS: case TOK_MINUS:
 			case TOK_STAR: case TOK_SLASH:
-			case TOK_EQ: case TOK_OR: {
+			case TOK_EQ: case TOK_OR:
+			case TOK_COL: {
 				TokenKind tk = peek(p).kind;
 				da_append(&nodes, ast({
 					.kind = AST_BIN_EXPR,
 					.loc = peek(p).loc,
 					.as.bin_expr.op =
+						tk == TOK_COL   ? AST_OP_PAIR  :
 						tk == TOK_EQ_EQ ? AST_OP_IS_EQ :
 						tk == TOK_AND   ? AST_OP_AND   :
 						tk == TOK_OR    ? AST_OP_OR    :
@@ -336,7 +425,8 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 				}));
 			} break;
 
-			default: lexer_error(peek(p).loc, "error: wrong expression");
+			default:
+			   lexer_error(peek(p).loc, "error: wrong expression");
 		}
 
 		next(p);
@@ -409,6 +499,10 @@ AST *parse_body(Parser *p, bool isProg) {
 
 			case TOK_IF_SYM: {
 				da_append(&body->as.body, parse_if_stmt(p));
+			} break;
+
+			case TOK_WHILE_SYM: {
+				da_append(&body->as.body, parse_while_stmt(p));
 			} break;
 
 			default:

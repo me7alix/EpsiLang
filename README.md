@@ -3,6 +3,12 @@
 # EpsiLang
 Epsilang - is an interpreted embeddable programming language written in C which is fast and simple.
 
+## Examples
+```
+print("Hello, World!");
+```
+Check the [examples](./examples) directory to see what’s currently implemented.
+
 ## Build
 ```
 cc -O3 -o build/epsl src/* -lm

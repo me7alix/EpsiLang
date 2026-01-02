@@ -18,12 +18,20 @@ typedef struct {
 	size_t capacity;
 } EpslVals;
 
+typedef struct {
+	char *items;
+	size_t count;
+	size_t capacity;
+} EpslString;
+
 struct EpslVal {
 	enum {
 		EPSL_VAL_INT,
 		EPSL_VAL_FLOAT,
 		EPSL_VAL_BOOL,
+		EPSL_VAL_STR,
 		EPSL_VAL_LIST,
+		EPSL_VAL_DICT,
 	} kind;
 	
 	union {
@@ -31,9 +39,11 @@ struct EpslVal {
 		double vfloat;
 		bool vbool;
 		EpslVals *list;
-		char *data;
+		void *dict;
+		EpslString *str;
 	} as;
 };
+
 
 EpslCtx *epsl_from_str(char *code);
 EpslCtx *epsl_from_file(char *filename);

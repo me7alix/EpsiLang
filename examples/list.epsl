@@ -1,0 +1,13 @@
+nums := [1, 2];
+
+append(nums, 3, 4, 5);
+print(nums);
+
+nums[1] = 777;
+print(nums);
+
+remove(nums, 1);
+print(nums);
+
+insert(nums, 0, 101);
+print(nums);

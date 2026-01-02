@@ -98,8 +98,8 @@ void ast_print(AST *n, int spaces) {
 
 		case AST_ST_IF: {
 			printf("st_if:\n");
-			ast_print(n->as.st_if.cond, spaces + gap);
-			ast_print(n->as.st_if.body, spaces + gap);
+			ast_print(n->as.st_if_chain.cond, spaces + gap);
+			ast_print(n->as.st_if_chain.body, spaces + gap);
 		} break;
 
 		default: assert(0);

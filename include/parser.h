@@ -1,9 +1,9 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+#include <stdbool.h>
 #include "lexer.h"
 #include "../3dparty/cplus.h"
-#include <stdbool.h>
 
 typedef enum {
 	AST_OP_EQ,
@@ -20,6 +20,7 @@ typedef enum {
 	AST_OP_AND,
 	AST_OP_OR,
 	AST_OP_ARR,
+	AST_OP_PAIR,
 } AST_Op;
 
 typedef struct {
@@ -27,12 +28,14 @@ typedef struct {
 		LITERAL_INT,
 		LITERAL_FLOAT,
 		LITERAL_BOOL,
+		LITERAL_STR,
 	} kind;
 
 	union {
 		double vfloat;
 		long long vint;
 		bool vbool;
+		char *vstr;
 	} as;
 } AST_Literal;
 
@@ -72,10 +75,12 @@ struct AST {
 		AST_VAR_DEF,
 		AST_VAR_MUT,
 		AST_LIST,
+		AST_DICT,
 		AST_FUNC_DEF,
 		AST_FUNC_CALL,
 		AST_ST_WHILE,
 		AST_ST_IF,
+		AST_ST_ELSE,
 		AST_BIN_EXPR,
 		AST_UN_EXPR,
 		AST_BODY,
@@ -89,7 +94,15 @@ struct AST {
 		struct {
 			AST *cond;
 			AST *body;
-		} st_if;
+			AST *chain;
+		} st_if_chain;
+		struct {
+			AST *body;
+		} st_else;
+		struct {
+			AST *cond;
+			AST *body;
+		} st_while;
 		struct {
 			char *id;
 			AST *expr;
@@ -119,6 +132,7 @@ struct AST {
 		ASTs body;
 		AST_Literal lit;
 		ASTs list;
+		ASTs dict;
 	} as;
 };
 
