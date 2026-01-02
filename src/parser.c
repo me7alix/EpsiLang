@@ -15,11 +15,11 @@ void expect(Parser *p, TokenKind tk) {
 		lexer_error(peek(p).loc, "error: unexpected token");
 }
 
-void symbol_stack_add(SymbolStack *ss, Symbol s) {
+void symbol_stack_add(AST_Stack *ss, AST_Symbol s) {
 	da_append(ss, s);
 }
 
-Symbol *symbol_stack_get(SymbolStack *ss, Token var) {
+AST_Symbol *symbol_stack_get(AST_Stack *ss, Token var) {
 	for (ssize_t i = ss->count - 1; i >= 0; i--) {
 		if (strcmp(da_get(ss, i).id, var.data) == 0) {
 			return &da_get(ss, i);
@@ -141,7 +141,7 @@ exit:
 }
 
 AST *parse_func_call(Parser *p) {
-	Symbol *sf = symbol_stack_get(&p->stack, peek(p));
+	AST_Symbol *sf = symbol_stack_get(&p->stack, peek(p));
 	if (sf->kind != SYMBOL_FUNC)
 		lexer_error(peek(p).loc, "error: no such function");
 
@@ -170,8 +170,8 @@ AST *parse_func_call(Parser *p) {
 	}
 
 	size_t args_cnt = fc->as.func_call.args.count;
-	if (sf->as.func.kind == FARGS_CNT_EQ    && sf->as.func.count != args_cnt ||
-		sf->as.func.kind == FARGS_CNT_GREAT && sf->as.func.count <= args_cnt)
+	if (sf->as.func.kind == FAC_EQ    && sf->as.func.count != args_cnt ||
+		sf->as.func.kind == FAC_GREAT && sf->as.func.count <= args_cnt)
 		lexer_error(fc->loc, "error: wrong amount of arguments");
 
 exit:
@@ -224,16 +224,16 @@ AST *parse_func_def(Parser *p) {
 
 	next(p);
 
-	symbol_stack_add(&p->stack, (Symbol){
+	symbol_stack_add(&p->stack, (AST_Symbol){
 		.kind = SYMBOL_FUNC,
 		.id = fd->as.func_def.id,
-		.as.func.kind = FARGS_CNT_EQ,
+		.as.func.kind = FAC_EQ,
 		.as.func.count = fd->as.func_def.args.count,
 	});
 
 	size_t stack_cnt = p->stack.count;
 	da_foreach (char*, it, &fd->as.func_def.args) {
-		symbol_stack_add(&p->stack, (Symbol){
+		symbol_stack_add(&p->stack, (AST_Symbol){
 			.kind = SYMBOL_VAR,
 			.id = *it,
 		});
@@ -286,7 +286,7 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 			} break;
 
 			case TOK_ID: {
-				Symbol *vs = symbol_stack_get(&p->stack, peek(p));
+				AST_Symbol *vs = symbol_stack_get(&p->stack, peek(p));
 				if (peek2(p).kind == TOK_OPAR) {
 					da_append(&nodes, parse_func_call(p));
 				} else {
@@ -366,7 +366,7 @@ AST *parse_var_def_assign(Parser *p) {
 	next(p);
 
 	vd->as.var_def.expr = parse_expr(p, PARSE_EXPR_SEMI);
-	symbol_stack_add(&p->stack, (Symbol){
+	symbol_stack_add(&p->stack, (AST_Symbol){
 		.kind = SYMBOL_VAR,
 		.id = vd->as.var_def.id,
 	});

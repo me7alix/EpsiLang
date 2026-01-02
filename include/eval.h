@@ -48,21 +48,19 @@ typedef DA(EvalSymbol) EvalStack;
 
 typedef struct {
 	enum {
-		EXEC_CTX_NONE,
-		EXEC_CTX_RET,
-		EXEC_CTX_BREAK,
-		EXEC_CTX_CONT,
+		EPSL_EXEC_CTX_NONE,
+		EPSL_EXEC_CTX_RET,
+		EPSL_EXEC_CTX_BREAK,
+		EPSL_EXEC_CTX_CONT,
 	} state;
 
 	EvalStack stack;
 } EvalCtx;
 
-void epsl_reg_func(
+Val eval(EvalCtx *ex, AST *n);
+void reg_func(
 	Parser *p, EvalCtx *ex,
 	RegFunc rf, char *name,
-	FuncArgsKind fk, size_t cnt
-);
-
-Val eval(EvalCtx *ex, AST *n);
+	FuncArgsKind fk, size_t cnt);
 
 #endif

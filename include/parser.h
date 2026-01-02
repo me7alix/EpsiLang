@@ -34,11 +34,11 @@ typedef struct {
 		long long vint;
 		bool vbool;
 	} as;
-} Literal;
+} AST_Literal;
 
 typedef enum {
-	FARGS_CNT_EQ,
-	FARGS_CNT_GREAT,
+	FAC_EQ,
+	FAC_GREAT,
 } FuncArgsKind;
 
 typedef struct {
@@ -54,13 +54,13 @@ typedef struct {
 			size_t count;
 		} func;
 	} as;
-} Symbol;
+} AST_Symbol;
 
-typedef DA(Symbol) SymbolStack;
+typedef DA(AST_Symbol) AST_Stack;
 
 typedef struct {
 	Lexer lexer;
-	SymbolStack stack;
+	AST_Stack stack;
 } Parser;
 
 typedef struct AST AST;
@@ -117,7 +117,7 @@ struct AST {
 		char *var;
 		AST *var_mut;
 		ASTs body;
-		Literal lit;
+		AST_Literal lit;
 		ASTs list;
 	} as;
 };

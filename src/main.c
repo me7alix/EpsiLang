@@ -1,34 +1,8 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "../include/parser.h"
-#include "../include/lexer.h"
-#include "../include/eval.h"
-#include "../include/print.h"
-
-char *read_file(const char *filename) {
-	FILE* file = fopen(filename, "rb");
-	if (!file) {
-		return NULL;
-	}
-
-	fseek(file, 0, SEEK_END);
-	long filesize = ftell(file);
-	rewind(file);
-
-	char *buffer = malloc(filesize + 1);
-	size_t read_size = fread(buffer, 1, filesize, file);
-	if (read_size != filesize) {
-		free(buffer);
-		fclose(file);
-		return NULL;
-	}
-
-	buffer[filesize] = '\0';
-	fclose(file);
-
-	return buffer;
-}
+#include <string.h>
+#include "../include/api.h"
 
 void print_usage() {
 	printf(
@@ -37,8 +11,6 @@ void print_usage() {
 		"  -ast   Print abstract syntax tree\n"
 		"  -tok   Print tokens\n");
 }
-
-void epsl_reg_stdlib(Parser *p, EvalCtx *ctx);
 
 int main(int argc, char *argv[]) {
 	char *input_file = NULL;
@@ -75,21 +47,7 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 
-	char *code = read_file(input_file);
-	if (!code) {
-		fprintf(stderr, "File reading error...\n");
-		return 1;
-	}
-
-	Lexer lexer = lexer_init(input_file, code);
-	if (print_toks) lexer_print(lexer);
-	Parser parser = {lexer};
-	EvalCtx eval_ctx = {0};
-	epsl_reg_stdlib(&parser, &eval_ctx);
-
-	AST *ast = parse(&parser);
-	if (print_ast) ast_print(ast, 0);
-	if (!(print_ast || print_toks))
-		eval(&eval_ctx, ast);
+	EpslCtx *ctx = epsl_from_file(input_file);
+	epsl_eval(ctx);
 	return 0;
 }

@@ -33,7 +33,7 @@ Val eval_binop(AST_Op op, Val lv, Val rv) {
 	} else return (Val){VAL_FLOAT, .as.vfloat = binop(op, val_get(lv), val_get(rv))};
 }
 
-void exec_stack_add(EvalStack *es, EvalSymbol esmbl) {
+void eval_stack_add(EvalStack *es, EvalSymbol esmbl) {
 	da_append(es, esmbl);
 }
 
@@ -56,7 +56,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 			size_t stack_size = ctx->stack.count;
 			da_foreach (AST*, it, &n->as.body) {
 				Val res = eval(ctx, *it);
-				if (ctx->state == EXEC_CTX_RET) {
+				if (ctx->state == EPSL_EXEC_CTX_RET) {
 					ctx->stack.count = stack_size;
 					return res;
 				}
@@ -66,7 +66,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 		} break;
 
 		case AST_VAR_DEF: {
-			exec_stack_add(&ctx->stack, (EvalSymbol){
+			eval_stack_add(&ctx->stack, (EvalSymbol){
 				.kind = EVAL_SYMB_VAR,
 				.id = n->as.var_def.id,
 				.as.var.val = eval(ctx, n->as.var_def.expr),
@@ -133,7 +133,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 		} break;
 
 		case AST_FUNC_DEF: {
-			exec_stack_add(&ctx->stack, (EvalSymbol){
+			eval_stack_add(&ctx->stack, (EvalSymbol){
 				.kind = EVAL_SYMB_FUNC,
 				.id = n->as.func_def.id,
 				.as.func.node = n,
@@ -159,16 +159,16 @@ Val eval(EvalCtx *ctx, AST *n) {
 					char *var_id = da_get(&f->as.func.node->as.func_def.args, i);;
 					AST *expr = da_get(&n->as.func_call.args, i);;
 
-					exec_stack_add(&ctx->stack, (EvalSymbol){
+					eval_stack_add(&ctx->stack, (EvalSymbol){
 						.kind = EVAL_SYMB_VAR,
 						.id = var_id,
 						.as.var.val = eval(ctx, expr),
 					});
 				}
 
-				ctx->state = EXEC_CTX_NONE;
+				ctx->state = EPSL_EXEC_CTX_NONE;
 				res = eval(ctx, f->as.func.node->as.func_def.body);
-				ctx->state = EXEC_CTX_NONE;
+				ctx->state = EPSL_EXEC_CTX_NONE;
 				ctx->stack.count = stack_size;
 			} else if (f->kind == EVAL_SYMB_REG_FUNC) {
 				Vals args = {0};
@@ -182,7 +182,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 
 		case AST_RET: {
 			Val v = eval(ctx, n->as.ret.expr);;
-			ctx->state = EXEC_CTX_RET;
+			ctx->state = EPSL_EXEC_CTX_RET;
 			return v;
 		} break;
 
@@ -196,12 +196,12 @@ Val eval(EvalCtx *ctx, AST *n) {
 	return (Val){0};
 }
 
-void epsl_reg_func(
+void reg_func(
 	Parser *p, EvalCtx *ex,
 	RegFunc rf, char *name,
 	FuncArgsKind fk, size_t cnt
 ) {
-	da_insert(&p->stack, 0, ((Symbol){
+	da_insert(&p->stack, 0, ((AST_Symbol){
 		.kind = SYMBOL_FUNC,
 		.id = name,
 		.as.func.kind = fk,
