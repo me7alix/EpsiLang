@@ -33,7 +33,7 @@ typedef struct {
 extern void reg_stdlib(Parser *p, EvalCtx *ctx);
 
 EpslCtx *epsl_from_str(char *code) {
-	EpslCtxR *ctx = malloc(sizeof(EpslCtx));
+	EpslCtxR *ctx = malloc(sizeof(EpslCtxR));
 	ctx->parser = (Parser){lexer_init("script", code)};
 	ctx->eval_ctx = (EvalCtx){0};
 	return ctx;

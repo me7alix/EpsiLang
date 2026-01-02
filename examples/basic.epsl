@@ -23,5 +23,3 @@ print(nums);
 
 insert(nums, 0, 101);
 print(nums);
-
-print(num);
