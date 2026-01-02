@@ -35,11 +35,17 @@ void ast_print(AST *n, int spaces) {
 				case LITERAL_INT:
 					printf("int(%lli)\n", n->as.lit.as.vint);
 					break;
+
 				case LITERAL_FLOAT:
 					printf("float(%lf)\n", n->as.lit.as.vfloat);
 					break;
+
 				case LITERAL_BOOL:
 					printf("bool(%s)\n", n->as.lit.as.vbool ? "true" : "false");
+					break;
+
+				case LITERAL_STR:
+					printf("str(%s)\n", n->as.lit.as.vstr);
 					break;
 			}
 		} break;
@@ -100,6 +106,30 @@ void ast_print(AST *n, int spaces) {
 			printf("st_if:\n");
 			ast_print(n->as.st_if_chain.cond, spaces + gap);
 			ast_print(n->as.st_if_chain.body, spaces + gap);
+			ast_print(n->as.st_if_chain.chain, spaces + gap);
+		} break;
+
+		case AST_ST_ELSE: {
+			printf("st_else:\n");
+			ast_print(n->as.st_else.body, spaces + gap);
+		} break;
+
+		case AST_ST_WHILE:{
+			printf("st_while:\n");
+			ast_print(n->as.st_while.cond, spaces + gap);
+			ast_print(n->as.st_while.body, spaces + gap);
+		} break;
+
+		case AST_LIST: {
+			printf("list:\n");
+			da_foreach (AST*, it, &n->as.list)
+				ast_print(*it, spaces + gap);
+		} break;
+
+		case AST_DICT: {
+			printf("dict:\n");
+			da_foreach (AST*, it, &n->as.list)
+				ast_print(*it, spaces + gap);
 		} break;
 
 		default: assert(0);

@@ -2,7 +2,6 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <threads.h>
 #include "../include/parser.h"
 #include "../include/eval.h"
 
@@ -36,6 +35,27 @@ void val_sprint(Val v, char *buf) {
 			}
 
 			sb_appendf(&sb, "]");
+			sprintf(buf, "%s", sb.items);
+			sb_free(&sb);
+		} break;
+
+		case VAL_DICT: {
+			StringBuilder sb = {0};
+			ValDict* dict = v.as.dict;
+			size_t count = 0;
+
+			sb_appendf(&sb, "{");
+			ht_foreach_node (ValDict, dict, kv) {
+				char buf[1024];
+				val_sprint(kv->key, buf);
+				sb_appendf(&sb, "%s: ", buf);
+				val_sprint(kv->val, buf);
+				sb_appendf(&sb, "%s", buf);
+				if (count++ < dict->count - 1)
+					sb_appendf(&sb, ", ");
+			}
+
+			sb_appendf(&sb, "}");
 			sprintf(buf, "%s", sb.items);
 			sb_free(&sb);
 		} break;

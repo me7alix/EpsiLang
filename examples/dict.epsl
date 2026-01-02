@@ -11,6 +11,8 @@ dict := {
 	"nine":  9,
 };
 
+print(dict);
+
 while true {
 	key := input("enter digit key: ");
 	if has(dict, key) {

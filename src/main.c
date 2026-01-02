@@ -48,6 +48,8 @@ int main(int argc, char *argv[]) {
 	}
 
 	EpslCtx *ctx = epsl_from_file(input_file);
-	epsl_eval(ctx);
+	if (print_toks) epsl_print_tokens(ctx);
+	else if (print_ast) epsl_print_ast(ctx);
+	else epsl_eval(ctx);
 	return 0;
 }

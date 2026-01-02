@@ -73,5 +73,5 @@ void epsl_print_ast(EpslCtx *ctx) {
 
 void epsl_print_tokens(EpslCtx *ctx) {
 	EpslCtxR *rctx = ctx;
-	ast_print(parse(&rctx->parser), 0);
+	lexer_print(rctx->parser.lexer);
 }
