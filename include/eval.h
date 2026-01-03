@@ -63,6 +63,9 @@ typedef struct {
 } EvalCtx;
 
 Val eval(EvalCtx *ex, AST *n);
+void reg_var(
+	Parser *p, EvalCtx *ex,
+	char *id, Val val);
 void reg_func(
 	Parser *p, EvalCtx *ex,
 	RegFunc rf, char *name,

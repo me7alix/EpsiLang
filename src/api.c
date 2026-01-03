@@ -36,6 +36,7 @@ EpslCtx *epsl_from_str(char *code) {
 	EpslCtxR *ctx = malloc(sizeof(EpslCtxR));
 	ctx->parser = (Parser){lexer_init("script", code)};
 	ctx->eval_ctx = (EvalCtx){0};
+	reg_stdlib(&ctx->parser, &ctx->eval_ctx);
 	return ctx;
 }
 

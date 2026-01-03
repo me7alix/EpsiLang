@@ -109,7 +109,10 @@ Val eval_binop(AST_Op op, Val lv, Val rv) {
 			.kind = VAL_BOOL,
 			.as.vbool = strcmp(lv.as.str->items, rv.as.str->items) == 0,
 		};
-	} else if (op == AST_OP_IS_EQ || op == AST_OP_OR) {
+	} else if (op == AST_OP_IS_EQ || op == AST_OP_NOT_EQ ||
+		op == AST_OP_AND || op == AST_OP_OR ||
+		op == AST_OP_GREAT || op == AST_OP_GREAT_EQ ||
+		op == AST_OP_LESS || op == AST_OP_LESS_EQ) {
 		return (Val){VAL_BOOL, .as.vbool = binop(op, val_get(lv), val_get(rv))};
 	} else if (lk == VAL_STR && rk == VAL_STR && op == AST_OP_ADD) {
 		StringBuilder *str = malloc(sizeof(*str));
@@ -134,7 +137,7 @@ void eval_stack_add(EvalStack *es, EvalSymbol esmbl) {
 }
 
 EvalSymbol *eval_stack_get(EvalStack *es, char *id) {
-	for (ssize_t i = es->count - 1; i >= 0; i--) {
+	for (int i = es->count - 1; i >= 0; i--) {
 		if (strcmp(da_get(es, i).id, id) == 0) {
 			return &da_get(es, i);
 		}
@@ -257,11 +260,11 @@ Val eval(EvalCtx *ctx, AST *n) {
 							if (!val) ValDict_add((ValDict*)es->as.var.val.as.dict, key, rhsv);
 							else *val = rhsv;
 						}
-					} else if (n->kind == AST_VAR) {
+					} else if (lhs->kind == AST_VAR) {
 						char *id = n->as.bin_expr.lhs->as.var;
 						EvalSymbol *es = eval_stack_get(&ctx->stack, id);
-						es->as.var.val = eval(ctx, n->as.bin_expr.rhs);
-					}
+						es->as.var.val = rhsv;
+					} else assert(!"= is used incorrectly");
 				} break;
 
 				default: {
@@ -291,8 +294,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 
 			if (cond.as.vbool)
 				return eval(ctx, n->as.st_if_chain.body);
-
-			if (n->as.st_if_chain.chain)
+			else if (n->as.st_if_chain.chain)
 				return eval(ctx, n->as.st_if_chain.chain);
 		} break;
 
@@ -301,7 +303,12 @@ Val eval(EvalCtx *ctx, AST *n) {
 			if (cond.kind != VAL_BOOL)
 				lexer_error(n->loc, "error: boolean expected");
 
-			while (cond.as.vbool) {
+			while (true) {
+				Val cond = eval(ctx, n->as.st_while.cond);
+				if (cond.kind != VAL_BOOL)
+					lexer_error(n->loc, "error: boolean expected");
+				if (!cond.as.vbool) break;
+
 				Val res = eval(ctx, n->as.st_while.body);
 				if (ctx->state == EXEC_CTX_BREAK) {
 					ctx->state = EXEC_CTX_NONE; break;
@@ -345,9 +352,11 @@ Val eval(EvalCtx *ctx, AST *n) {
 		} break;
 
 		case AST_RET: {
-			Val v = eval(ctx, n->as.ret.expr);;
-			ctx->state = EXEC_CTX_RET;
-			return v;
+			if (n->as.ret.expr) {
+				Val v = eval(ctx, n->as.ret.expr);
+				ctx->state = EXEC_CTX_RET;
+				return v;
+			}
 		} break;
 
 		case AST_BREAK: {
@@ -368,13 +377,29 @@ Val eval(EvalCtx *ctx, AST *n) {
 	return (Val){0};
 }
 
+void reg_var(
+	Parser *p, EvalCtx *ex,
+	char *id, Val val
+) {
+	da_insert(&p->stack, 0, ((AST_Symbol){
+		.kind = AST_SYMB_VAR,
+		.id = id,
+	}));
+
+	da_insert(&ex->stack, 0, ((EvalSymbol){
+		.kind = EVAL_SYMB_VAR,
+		.id = id,
+		.as.var.val = val,
+	}));
+}
+
 void reg_func(
 	Parser *p, EvalCtx *ex,
 	RegFunc rf, char *name,
 	FuncArgsKind fk, size_t cnt
 ) {
 	da_insert(&p->stack, 0, ((AST_Symbol){
-		.kind = SYMBOL_FUNC,
+		.kind = AST_SYMB_FUNC,
 		.id = name,
 		.as.func.kind = fk,
 		.as.func.count = cnt,

@@ -91,6 +91,23 @@ Val Int(Vals args) {
 	}
 }
 
+Val Len(Vals args) {
+	Val arg = args.items[0];
+	long long len;
+
+	switch (arg.kind) {
+		case VAL_LIST: len = arg.as.list->count;             break;
+		case VAL_DICT: len = ((ValDict*)arg.as.dict)->count; break;
+		case VAL_STR:  len = arg.as.str->count;              break;
+		default: assert(!"len accepts: list, str and dict");
+	}
+
+	return (Val){
+		.kind = VAL_INT,
+		.as.vint = len,
+	};
+}
+
 Val Str(Vals args) {
 	StringBuilder *str = malloc(sizeof(*str));
 	*str = (StringBuilder){0};
@@ -154,6 +171,19 @@ Val Exit(Vals args) {
 	return (Val){0};
 }
 
+Val System(Vals args) {
+	Val arg = da_get(&args, 0);
+	char *str =
+		arg.kind == VAL_STR ? arg.as.str->items :
+		(assert(!"string expected"), NULL);
+
+
+	return (Val){
+		.kind = VAL_INT,
+		.as.vint = system(str),
+	};
+}
+
 Val Append(Vals args) {
 	if (args.items[0].kind == VAL_LIST) {
 		Vals *list = args.items[0].as.list;
@@ -162,8 +192,9 @@ Val Append(Vals args) {
 	} else if (args.items[0].kind == VAL_STR) {
 		StringBuilder *str = args.items[0].as.str;
 		for (size_t i = 1; i < args.count; i++) {
-			if (args.items[i].kind != VAL_STR) assert("support only str for appending for now");
-			sb_appendf(str, "%s%s", str->items, args.items[i].as.str);
+			if (args.items[i].kind != VAL_STR)
+				assert(!"support only str for appending for now");
+			sb_appendf(str, "%s", args.items[i].as.str->items);
 		}
 	}
 
@@ -216,7 +247,32 @@ err:
 	return (Val){0};
 }
 
+
+void reg_platform(Parser *p, EvalCtx *ctx) {
+	StringBuilder *str = malloc(sizeof(*str));
+	*str = (StringBuilder){0};
+	char *platform;
+
+#if defined(_WIN32)
+	platform = "WINDOWS";
+#elif defined(__linux__)
+	platform = "LINUX";
+#elif defined(__APPLE__)
+	platform = "APPLE";
+#else
+	platform = "NONE";
+#endif
+
+	sb_appendf(str, "%s", platform);
+	reg_var(p, ctx, "_OS_", (Val){
+		.kind = VAL_STR,
+		.as.str = str,
+	});
+}
+
 void reg_stdlib(Parser *p, EvalCtx *ctx) {
+	reg_platform(p, ctx);
+	reg_func(p, ctx, Len,    "len",    FAC_EQ,    1);
 	reg_func(p, ctx, Has,    "has",    FAC_EQ,    2);
 	reg_func(p, ctx, Int,    "int",    FAC_EQ,    1);
 	reg_func(p, ctx, Str,    "str",    FAC_EQ,    1);
@@ -227,4 +283,5 @@ void reg_stdlib(Parser *p, EvalCtx *ctx) {
 	reg_func(p, ctx, Insert, "insert", FAC_EQ,    3);
 	reg_func(p, ctx, Sqrt,   "sqrt",   FAC_EQ,    1);
 	reg_func(p, ctx, Exit,   "exit",   FAC_EQ,    1);
+	reg_func(p, ctx, System, "system", FAC_EQ,    1);
 }

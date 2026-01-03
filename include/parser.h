@@ -46,8 +46,8 @@ typedef enum {
 
 typedef struct {
 	enum {
-		SYMBOL_VAR,
-		SYMBOL_FUNC,
+		AST_SYMB_VAR,
+		AST_SYMB_FUNC,
 	} kind;
 	char *id;
 
@@ -81,6 +81,7 @@ struct AST {
 		AST_ST_WHILE,
 		AST_ST_IF,
 		AST_ST_ELSE,
+		AST_ST_ELSE_IF,
 		AST_BIN_EXPR,
 		AST_UN_EXPR,
 		AST_BODY,

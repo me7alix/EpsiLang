@@ -311,7 +311,7 @@ Token lexer_next(Lexer *l) {
 					lexer_error(l->cur_loc, "error: ' expected");
 			}
 
-			else if (isalpha(*l->cur_char)) {
+			else if (isalpha(*l->cur_char) || *l->cur_char == '_') {
 				for (size_t i = 0; i < ARR_LEN(keywordPairs); i++) {
 					const char *kp = keywordPairs[i].id;
 					if (is_tok(l, kp)) {

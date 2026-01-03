@@ -181,7 +181,7 @@ exit:
 
 AST *parse_func_call(Parser *p) {
 	AST_Symbol *sf = symbol_stack_get(&p->stack, peek(p));
-	if (sf->kind != SYMBOL_FUNC)
+	if (sf->kind != AST_SYMB_FUNC)
 		lexer_error(peek(p).loc, "error: no such function");
 
 	AST *fc = ast({
@@ -230,6 +230,12 @@ AST *parse_if_stmt(Parser *p) {
 
 	if (peek2(p).kind == TOK_ELSE_SYM) {
 		next(p);
+
+		if (peek2(p).kind == TOK_IF_SYM) {
+			next(p);
+			ifst->as.st_if_chain.chain = parse_if_stmt(p);
+			return ifst;
+		}
 
 		AST *elst = ast({
 			.kind = AST_ST_ELSE,
@@ -288,7 +294,7 @@ AST *parse_func_def(Parser *p) {
 	next(p);
 
 	symbol_stack_add(&p->stack, (AST_Symbol){
-		.kind = SYMBOL_FUNC,
+		.kind = AST_SYMB_FUNC,
 		.id = fd->as.func_def.id,
 		.as.func.kind = FAC_EQ,
 		.as.func.count = fd->as.func_def.args.count,
@@ -297,7 +303,7 @@ AST *parse_func_def(Parser *p) {
 	size_t stack_cnt = p->stack.count;
 	da_foreach (char*, it, &fd->as.func_def.args) {
 		symbol_stack_add(&p->stack, (AST_Symbol){
-			.kind = SYMBOL_VAR,
+			.kind = AST_SYMB_VAR,
 			.id = *it,
 		});
 	}
@@ -403,6 +409,8 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 				}));
 			} break;
 
+			case TOK_LESS: case TOK_LESS_EQ:
+			case TOK_GREAT: case TOK_GREAT_EQ:
 			case TOK_EQ_EQ: case TOK_AND:
 			case TOK_PLUS: case TOK_MINUS:
 			case TOK_STAR: case TOK_SLASH:
@@ -413,15 +421,19 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 					.kind = AST_BIN_EXPR,
 					.loc = peek(p).loc,
 					.as.bin_expr.op =
-						tk == TOK_COL   ? AST_OP_PAIR  :
-						tk == TOK_EQ_EQ ? AST_OP_IS_EQ :
-						tk == TOK_AND   ? AST_OP_AND   :
-						tk == TOK_OR    ? AST_OP_OR    :
-						tk == TOK_EQ    ? AST_OP_EQ    :
-						tk == TOK_PLUS  ? AST_OP_ADD   :
-						tk == TOK_MINUS ? AST_OP_SUB   :
-						tk == TOK_STAR  ? AST_OP_MUL   :
-						tk == TOK_SLASH ? AST_OP_DIV   : 0,
+						tk == TOK_LESS     ? AST_OP_LESS     :
+						tk == TOK_LESS_EQ  ? AST_OP_LESS_EQ  :
+						tk == TOK_GREAT    ? AST_OP_GREAT    :
+						tk == TOK_GREAT_EQ ? AST_OP_GREAT_EQ :
+						tk == TOK_COL      ? AST_OP_PAIR     :
+						tk == TOK_EQ_EQ    ? AST_OP_IS_EQ    :
+						tk == TOK_AND      ? AST_OP_AND      :
+						tk == TOK_OR       ? AST_OP_OR       :
+						tk == TOK_EQ       ? AST_OP_EQ       :
+						tk == TOK_PLUS     ? AST_OP_ADD      :
+						tk == TOK_MINUS    ? AST_OP_SUB      :
+						tk == TOK_STAR     ? AST_OP_MUL      :
+						tk == TOK_SLASH    ? AST_OP_DIV      : 0,
 				}));
 			} break;
 
@@ -436,13 +448,12 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 }
 
 AST *parse_func_ret(Parser *p) {
-	next(p);
-
 	AST *fr = ast({
 		.kind = AST_RET,
-		.as.ret.expr = parse_expr(p, PARSE_EXPR_SEMI),
+		.loc = next(p).loc,
 	});
 
+	fr->as.ret.expr = parse_expr(p, PARSE_EXPR_SEMI);
 	return fr;
 }
 
@@ -457,7 +468,7 @@ AST *parse_var_def_assign(Parser *p) {
 
 	vd->as.var_def.expr = parse_expr(p, PARSE_EXPR_SEMI);
 	symbol_stack_add(&p->stack, (AST_Symbol){
-		.kind = SYMBOL_VAR,
+		.kind = AST_SYMB_VAR,
 		.id = vd->as.var_def.id,
 	});
 	return vd;

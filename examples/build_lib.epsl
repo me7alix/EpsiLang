@@ -1,0 +1,84 @@
+fn make_dir(dir_name) {
+	if _OS_ == "LINUX" || _OS_ == "APPLE" {
+		system("mkdir -p " + dir_name);
+	} else if _OS_ == "WINDOWS" {
+		system("md " + dir_name);
+	} else {
+		print("OS is not supported");
+		exit(1);
+	}
+}
+
+fn copy_file(src, dst) {
+	if _OS_ == "LINUX" || _OS_ == "APPLE" {
+		system("cp " + src + " " + dst);
+	} else if _OS_ == "WINDOWS" {
+		system("copy " + src + " " + dst);
+	} else {
+		print("OS is not supported");
+		exit(1);
+	}
+}
+
+fn SO() {
+	if _OS_ == "LINUX" {
+		return ".so";
+	} else if _OS_ == "WINDOWS" {
+		return ".dll";
+	} else if _OS_ == "APPLE" {
+		return ".dylib";
+	} else {
+		print("OS is not supported");
+		exit(1);
+	}
+}
+
+fn str_srcs(l) {
+	res := "";
+	i := 0; while i < len(l) {
+		append(res, str(l[i]), " ");
+		i = i + 1;
+	}
+
+	return res;
+}
+
+fn cmd_builder(args) {
+	cmd := "";
+	i := 0; while i < len(args) {
+		append(cmd, args[i], " ");
+		i = i + 1;
+	}
+
+	return cmd;
+}
+
+CC := "gcc";
+
+srcs := [
+	"src/api.c",
+	"src/print.c",
+	"src/lexer.c",
+	"src/parser.c",
+	"src/eval.c",
+	"src/stdlib.c",
+];
+
+build_folder := "build/epsilang/";
+
+cmd := cmd_builder([
+	CC,
+	"-fPIC",
+	"-shared",
+	"-std=c99",
+	"-O3",
+	"-o " + build_folder + "lib/libepsl" + SO(),
+	str_srcs(srcs),
+]);
+
+make_dir("build");
+make_dir(build_folder);
+make_dir(build_folder + "include/");
+make_dir(build_folder + "lib/");
+copy_file("include/api.h", build_folder + "include/");
+system(cmd);
