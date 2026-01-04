@@ -45,33 +45,6 @@ bool is_tok(Lexer *lexer, const char *tok) {
 	return true;
 }
 
-void lexer_error(Location loc, char *error) {
-	size_t lines_num = loc.line_num + 1;
-	size_t chars_num = loc.line_char-loc.line_start + 1;
-	printf("%s:%zu:%zu: %s\n", loc.file, lines_num, chars_num, error);
-
-	loc.line_char = loc.line_start;
-	char error_pointer[128];
-	size_t cnt = 0;
-
-	while (*loc.line_char != '\n' && *loc.line_char != '\0'){
-		printf("%c", *loc.line_char);
-		if (cnt < chars_num - 1) {
-			if (*loc.line_char != '\t')
-				error_pointer[cnt++] = ' ';
-			else
-				error_pointer[cnt++] = '\t';
-		}
-		loc.line_char++;
-	}
-
-	printf("\n");
-	error_pointer[cnt++] = '^';
-	error_pointer[cnt] = '\0';
-	printf("%s\n", error_pointer);
-	exit(1);
-}
-
 Lexer lexer_init(char *file, char *code) {
 	return (Lexer) {
 		.cur_loc.file = file,
@@ -144,6 +117,9 @@ Token lexer_next(Lexer *l) {
 		case '-': {
 			if (l->cur_char[1] == '=') {
 				ret = token(l, TOK_MINUS_EQ, "-=");
+				l->cur_char++;
+			} else if (l->cur_char[1] == '>') {
+				ret = token(l, TOK_ARROW, "->");
 				l->cur_char++;
 			} else ret = token(l, TOK_MINUS, "-");
 		} break;
@@ -220,6 +196,9 @@ Token lexer_next(Lexer *l) {
 			if (l->cur_char[1] == '=') {
 				ret = token(l, TOK_EQ_EQ, "==");
 				l->cur_char++;
+			} else if (l->cur_char[1] == '>') {
+				ret = token(l, TOK_ARROW_EQ, "=>");
+				l->cur_char++;
 			} else {
 				ret = token(l, TOK_EQ, "=");
 			}
@@ -270,18 +249,19 @@ Token lexer_next(Lexer *l) {
 				StringBuilder sb = {0};
 				l->cur_char++;
 
-				while (!(l->cur_char[0] == '\"' && l->cur_char[-1] != '\\')) {
+				while (l->cur_char[0] != '\"') {
 					if (l->cur_char[0] == '\\') {
 						switch (l->cur_char[1]) {
 							case '\\': sb_append(&sb, '\\'); break;
 							case '0':  sb_append(&sb, '\0'); break;
 							case 'n':  sb_append(&sb, '\n'); break;
 							case '\"': sb_append(&sb, '\"'); break;
-							default: lexer_error(l->cur_loc, "error: wrong character");
+							default: ret = token(l, TOK_ID, "wrong character");
 						}
 						l->cur_char++;
 					} else if (l->cur_char[0] == '\0') {
-						lexer_error(l->cur_loc, "error: unclosed string");
+						ret = token(l, TOK_ID, "unclosed string");
+						break;
 					} else {
 						sb_append(&sb, l->cur_char[0]);
 					}
@@ -302,13 +282,13 @@ Token lexer_next(Lexer *l) {
 						case 'n':  ret = token(l, TOK_CHAR, "\n"); break;
 						case '\\': ret = token(l, TOK_CHAR, "\\"); break;
 						case '\'': ret = token(l, TOK_CHAR, "'");  break;
-						default: lexer_error(l->cur_loc, "error: wrong character");
+						default: ret = token(l, TOK_ID, "wrong character");
 					}
 				} else ret = token(l, TOK_CHAR, l->cur_char);
 
 				l->cur_char++;
 				if (*l->cur_char != '\'')
-					lexer_error(l->cur_loc, "error: ' expected");
+					ret = token(l, TOK_ID, "' expected");
 			}
 
 			else if (isalpha(*l->cur_char) || *l->cur_char == '_') {
@@ -324,7 +304,7 @@ Token lexer_next(Lexer *l) {
 				ret = token(l, TOK_ID, get_word(l));
 			}
 
-			else lexer_error(l->cur_loc, "error: unknown token");
+			else ret = token(l, TOK_ID, "unknown token");
 		} break;
 	}
 

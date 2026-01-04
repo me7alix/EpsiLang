@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include "lexer.h"
+#include "err.h"
 #include "../3dparty/cplus.h"
 
 typedef enum {
@@ -45,25 +46,8 @@ typedef enum {
 } FuncArgsKind;
 
 typedef struct {
-	enum {
-		AST_SYMB_VAR,
-		AST_SYMB_FUNC,
-	} kind;
-	char *id;
-
-	union {
-		struct {
-			FuncArgsKind kind;
-			size_t count;
-		} func;
-	} as;
-} AST_Symbol;
-
-typedef DA(AST_Symbol) AST_Stack;
-
-typedef struct {
 	Lexer lexer;
-	AST_Stack stack;
+	ErrorCtx ec;
 } Parser;
 
 typedef struct AST AST;
@@ -72,6 +56,7 @@ struct AST {
 	enum {
 		AST_PROG,
 		AST_VAR,
+		AST_VAR_ANY,
 		AST_VAR_DEF,
 		AST_VAR_MUT,
 		AST_LIST,
@@ -79,9 +64,9 @@ struct AST {
 		AST_FUNC_DEF,
 		AST_FUNC_CALL,
 		AST_ST_WHILE,
+		AST_ST_FOR,
 		AST_ST_IF,
 		AST_ST_ELSE,
-		AST_ST_ELSE_IF,
 		AST_BIN_EXPR,
 		AST_UN_EXPR,
 		AST_BODY,
@@ -107,6 +92,11 @@ struct AST {
 			AST *body;
 		} st_while;
 		struct {
+			char *var_id;
+			AST *coll;
+			AST *body;
+		} st_for;
+		struct {
 			char *id;
 			AST *expr;
 		} var_def;
@@ -127,7 +117,7 @@ struct AST {
 		} func_call;
 		struct {
 			char *id;
-			DA(char*) args;
+			ASTs args;
 			AST *body;
 		} func_def;
 		char *var;

@@ -3,10 +3,11 @@
 
 #include <stdbool.h>
 #include "../include/parser.h"
+#include "err.h"
 
 typedef struct Val Val;
 typedef DA(Val) Vals;
-typedef Val (*RegFunc)(Vals args);
+typedef Val (*RegFunc)(Location call_loc, ErrorCtx *ec, Vals args);
 
 struct Val {
 	enum {
@@ -60,15 +61,11 @@ typedef struct {
 	} state;
 
 	EvalStack stack;
+	ErrorCtx ec;
 } EvalCtx;
 
-Val eval(EvalCtx *ex, AST *n);
-void reg_var(
-	Parser *p, EvalCtx *ex,
-	char *id, Val val);
-void reg_func(
-	Parser *p, EvalCtx *ex,
-	RegFunc rf, char *name,
-	FuncArgsKind fk, size_t cnt);
+Val eval(EvalCtx *ctx, AST *n);
+void reg_var(EvalCtx *ctx, const char *id, Val val);
+void reg_func(EvalCtx *ctx, const char *id, RegFunc rf);
 
 #endif

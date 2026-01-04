@@ -3,7 +3,11 @@
 #include <sys/types.h>
 #include "../include/parser.h"
 
-#define ast(...) ast_alloc((AST)__VA_ARGS__)
+void parser_error(Parser *p, Location loc, char *msg) {
+	p->ec.got_err = true;
+	p->ec.errf(loc, ERROR_COMPTIME, msg);
+}
+
 AST *ast_alloc(AST ast) {
 	AST *n = malloc(sizeof(AST));
 	*n = ast;
@@ -11,23 +15,13 @@ AST *ast_alloc(AST ast) {
 }
 
 void expect(Parser *p, TokenKind tk) {
-	if (peek(p).kind != tk)
-		lexer_error(peek(p).loc, "error: unexpected token");
-}
-
-void symbol_stack_add(AST_Stack *ss, AST_Symbol s) {
-	da_append(ss, s);
-}
-
-AST_Symbol *symbol_stack_get(AST_Stack *ss, Token var) {
-	for (ssize_t i = ss->count - 1; i >= 0; i--) {
-		if (strcmp(da_get(ss, i).id, var.data) == 0) {
-			return &da_get(ss, i);
-		}
+	if (peek(p).kind == TOK_ERR) {
+		parser_error(p, peek(p).loc, peek(p).data);
+		return;
 	}
 
-	lexer_error(var.loc, "error: no such symbol at the scope");
-	return NULL;
+	if (peek(p).kind != tk)
+		parser_error(p, peek(p).loc, "unexpected token");
 }
 
 double parse_float(char *data) {
@@ -66,7 +60,7 @@ uint ast_op_precedence(AST_Op op, bool l) {
 	}
 }
 
-AST *parse_expand(ASTs *nodes) {
+AST *parse_expand(Parser *p, ASTs *nodes) {
 	for (size_t i = 0; i < nodes->count; i++) {
 		if (nodes->count == 1)
 			return da_get(nodes, 0);
@@ -84,8 +78,10 @@ AST *parse_expand(ASTs *nodes) {
 			if (i < nodes->count - 1)
 				rpr = ast_op_precedence(da_get(nodes, i + 1)->as.bin_expr.op, true);
 
-			if (lpr == 0 && rpr == 0)
-				lexer_error(node->loc, "error: wrong expression");
+			if (lpr == 0 && rpr == 0) {
+				parser_error(p, node->loc, "wrong expression");
+				return NULL;
+			}
 
 			if (lpr > rpr) da_get(nodes, i - 1)->as.bin_expr.rhs = node;
 			else           da_get(nodes, i + 1)->as.bin_expr.lhs = node;
@@ -95,44 +91,48 @@ AST *parse_expand(ASTs *nodes) {
 		}
 	}
 
-	return parse_expand(nodes);
+	return parse_expand(p, nodes);
 }
 
 typedef enum {
-	PARSE_EXPR_SEMI,
-	PARSE_EXPR_CPAR,
+	PARSE_EXPR_STMT,
+	PARSE_EXPR_PARS,
 	PARSE_EXPR_ARGS,
-	PARSE_EXPR_OBRA,
-	PARSE_EXPR_SQBRA,
+	PARSE_EXPR_BODY,
+	PARSE_EXPR_SQBRAS,
 } ParseExprKind;
 
 AST *parse_expr(Parser *p, ParseExprKind pek);
 
 AST *parse_list(Parser *p) {
-	AST *ln = ast({
+	AST *list = ast_alloc((AST){
 		.kind = AST_LIST,
+		.loc = peek(p).loc,
 		.as.list = NULL,
 	});
 
 	if (peek2(p).kind == TOK_CSQBRA) {
 		next(p);
-		return ln;
+		return list;
 	}
-	
+
 	next(p);
 	for (;;) {
 		switch (peek(p).kind) {
 			case TOK_CSQBRA: goto exit;
 
 			case TOK_COM: {
-				if(peek2(p).kind == TOK_COM)
-					lexer_error(peek(p).loc, "error: too many coms");
+				if(peek2(p).kind == TOK_COM) {
+					parser_error(p, peek(p).loc, "too many coms");
+					return NULL;
+				}
 				next(p);
 			} break;
 
 			default: {
 				AST *expr = parse_expr(p, PARSE_EXPR_ARGS);
-				da_append(&ln->as.list, expr);
+				if (p->ec.got_err) return NULL;
+				da_append(&list->as.list, expr);
 			} break;
 		}
 	}
@@ -140,152 +140,208 @@ AST *parse_list(Parser *p) {
 
 exit:
 	expect(p, TOK_CSQBRA);
-	return ln;
+	return list;
 }
 
 AST *parse_dict(Parser *p) {
-	AST *dn = ast({
+	AST *dict = ast_alloc((AST){
 		.kind = AST_DICT,
+		.loc = peek(p).loc,
 		.as.dict = {0},
 	});
 
 	if (peek2(p).kind == TOK_CBRA) {
 		next(p);
-		return dn;
+		return dict;
 	}
-	
+
 	next(p);
 	for (;;) {
 		switch (peek(p).kind) {
 			case TOK_CBRA: goto exit;
 
 			case TOK_COM: {
-				if(peek2(p).kind == TOK_COM)
-					lexer_error(peek(p).loc, "error: too many coms");
+				if(peek2(p).kind == TOK_COM) {
+					parser_error(p, peek(p).loc, "too many coms");
+					return NULL;
+				}
 				next(p);
 			} break;
 
 			default: {
 				AST *expr = parse_expr(p, PARSE_EXPR_ARGS);
-				if (expr->kind != AST_BIN_EXPR && expr->as.bin_expr.op != AST_OP_PAIR)
-					lexer_error(expr->loc, "error: key value pair expected");
-				da_append(&dn->as.dict, expr);
+				if (p->ec.got_err) return NULL;
+
+				if (expr->kind != AST_BIN_EXPR && expr->as.bin_expr.op != AST_OP_PAIR) {
+					parser_error(p, expr->loc, "key value pair expected");
+					return NULL;
+				}
+				da_append(&dict->as.dict, expr);
 			} break;
 		}
 	}
 
 exit:
 	expect(p, TOK_CBRA);
-	return dn;
+	return dict;
 }
 
 AST *parse_func_call(Parser *p) {
-	AST_Symbol *sf = symbol_stack_get(&p->stack, peek(p));
-	if (sf->kind != AST_SYMB_FUNC)
-		lexer_error(peek(p).loc, "error: no such function");
-
-	AST *fc = ast({
+	AST *func_call = ast_alloc((AST){
 		.kind = AST_FUNC_CALL,
-		.loc = p->lexer.cur_loc,
-		.as.func_call.id = next(p).data,
+		.loc = peek(p).loc,
 	});
 
-	next(p);
+	func_call->as.func_call.id = next(p).data,
+		expect(p, TOK_OPAR); next(p);
+
 	for (;;) {
 		switch (peek(p).kind) {
 			case TOK_CPAR: goto exit;
 
 			case TOK_COM: {
-				if(peek2(p).kind == TOK_COM)
-					lexer_error(peek(p).loc, "error: too many coms");
+				if(peek2(p).kind == TOK_COM) {
+					parser_error(p, peek(p).loc, "too many coms");
+					return NULL;
+				}
 				next(p);
 			} break;
 
 			default: {
 				AST *expr = parse_expr(p, PARSE_EXPR_ARGS);
-				da_append(&fc->as.func_call.args, expr);
+				if (p->ec.got_err) return NULL;
+				da_append(&func_call->as.func_call.args, expr);
 			} break;
 		}
 	}
 
-	size_t args_cnt = fc->as.func_call.args.count;
-	if (sf->as.func.kind == FAC_EQ    && sf->as.func.count != args_cnt ||
-		sf->as.func.kind == FAC_GREAT && sf->as.func.count <= args_cnt)
-		lexer_error(fc->loc, "error: wrong amount of arguments");
-
 exit:
-	return fc;
+	return func_call;
 }
 
 AST *parse_body(Parser *p, bool isProg);
 
 AST *parse_if_stmt(Parser *p) {
-	AST *ifst = ast({
+	AST *if_st = ast_alloc((AST){
 		.kind = AST_ST_IF,
 		.loc = next(p).loc,
 	});
 
-	ifst->as.st_if_chain.cond = parse_expr(p, PARSE_EXPR_OBRA);
-	ifst->as.st_if_chain.body = parse_body(p, false);
+	if_st->as.st_if_chain.cond = parse_expr(p, PARSE_EXPR_BODY);
+	if (p->ec.got_err) return NULL;
+	if_st->as.st_if_chain.body = parse_body(p, false);
+	if (p->ec.got_err) return NULL;
 
 	if (peek2(p).kind == TOK_ELSE_SYM) {
 		next(p);
 
 		if (peek2(p).kind == TOK_IF_SYM) {
 			next(p);
-			ifst->as.st_if_chain.chain = parse_if_stmt(p);
-			return ifst;
+			if_st->as.st_if_chain.chain = parse_if_stmt(p);
+			if (p->ec.got_err) return NULL;
+			return if_st;
 		}
 
-		AST *elst = ast({
+		AST *elst = ast_alloc((AST){
 			.kind = AST_ST_ELSE,
 			.loc = next(p).loc
 		});
 
 		elst->as.st_else.body = parse_body(p, false);
-		ifst->as.st_if_chain.chain = elst;
+		if (p->ec.got_err) return NULL;
+		if_st->as.st_if_chain.chain = elst;
 	}
 
-	return ifst;
+	return if_st;
+}
+
+AST *parse_for_stmt(Parser *p) {
+	AST *for_st = ast_alloc((AST){
+		.kind = AST_ST_FOR,
+		.loc = next(p).loc,
+	});
+
+	expect(p, TOK_ID);
+	if (p->ec.got_err) return NULL;
+	for_st->as.st_for.var_id = next(p).data;
+
+	expect(p, TOK_ID);
+	if (p->ec.got_err) return NULL;
+	if (strcmp(peek(p).data, "in") != 0) {
+		parser_error(p, peek(p).loc, "\"in\" keyword expected");
+		return NULL;
+	}
+
+	next(p);
+
+	for_st->as.st_for.coll = parse_expr(p, PARSE_EXPR_BODY);
+	if (p->ec.got_err) return NULL;
+
+	for_st->as.st_for.body = parse_body(p, false);
+	return for_st;
 }
 
 AST *parse_while_stmt(Parser *p) {
-	AST *wst = ast({
+	AST *wst = ast_alloc((AST){
 		.kind = AST_ST_WHILE,
 		.loc = next(p).loc,
 	});
 
-	wst->as.st_while.cond = parse_expr(p, PARSE_EXPR_OBRA);
+	wst->as.st_while.cond = parse_expr(p, PARSE_EXPR_BODY);
+	if (p->ec.got_err) return NULL;
 	wst->as.st_while.body = parse_body(p, false);
+	if (p->ec.got_err) return NULL;
 	return wst;
 }
 
 AST *parse_func_def(Parser *p) {
-	next(p);
-	expect(p, TOK_ID);
+	next(p); expect(p, TOK_ID);
+	if (p->ec.got_err) return NULL;
 
-	AST *fd = ast({
+	AST *func_def = ast_alloc((AST){
 		.kind = AST_FUNC_DEF,
-		.loc = p->lexer.cur_loc,
-		.as.func_def.id = next(p).data,
+		.loc = peek(p).loc,
 	});
 
+	func_def->as.func_def.id = next(p).data;
 	expect(p, TOK_OPAR);
+	if (p->ec.got_err) return NULL;
 	next(p);
 
+	bool found_any = false;
 	while (peek(p).kind != TOK_CPAR) {
 		switch (peek(p).kind) {
 			case TOK_COM:
-				if(peek2(p).kind == TOK_COM)
-					lexer_error(peek(p).loc, "error: too many coms");
+				if(peek2(p).kind == TOK_COM) {
+					parser_error(p, peek(p).loc, "too many coms");
+					return NULL;
+				}
+				break;
+
+			case TOK_ANY:
+				if (found_any) {
+					parser_error(p, peek(p).loc, "only one variadic parameter is allowed");
+					return NULL;
+				}
+
+				found_any = true;
+				da_append(&func_def->as.func_def.args, ast_alloc((AST){
+					.kind = AST_VAR_ANY,
+					.loc = peek(p).loc,
+				}));
 				break;
 
 			case TOK_ID:
-				da_append(&fd->as.func_def.args, peek(p).data);
+				da_append(&func_def->as.func_def.args, ast_alloc((AST){
+					.kind = AST_VAR,
+					.loc = peek(p).loc,
+					.as.var = peek(p).data,
+				}));
 				break;
 
 			default:
-				lexer_error(peek(p).loc, "error: wrong func args");
+				parser_error(p, peek(p).loc, "wrong function argument");
+				return NULL;
 		}
 
 		next(p);
@@ -293,56 +349,44 @@ AST *parse_func_def(Parser *p) {
 
 	next(p);
 
-	symbol_stack_add(&p->stack, (AST_Symbol){
-		.kind = AST_SYMB_FUNC,
-		.id = fd->as.func_def.id,
-		.as.func.kind = FAC_EQ,
-		.as.func.count = fd->as.func_def.args.count,
-	});
-
-	size_t stack_cnt = p->stack.count;
-	da_foreach (char*, it, &fd->as.func_def.args) {
-		symbol_stack_add(&p->stack, (AST_Symbol){
-			.kind = AST_SYMB_VAR,
-			.id = *it,
-		});
-	}
-
-	fd->as.func_def.body = parse_body(p, false);
-	p->stack.count = stack_cnt;
-	return fd;
+	func_def->as.func_def.body = parse_body(p, false);
+	return func_def;
 }
 
 AST *parse_expr(Parser *p, ParseExprKind pek) {
 	ASTs nodes = {0};
 
 	for (;;) {
-		if (pek == PARSE_EXPR_SEMI) {
+		if (p->ec.got_err) return NULL;
+		if (pek == PARSE_EXPR_STMT) {
 			if (peek(p).kind == TOK_SEMI) break;
-		} else if (pek == PARSE_EXPR_CPAR) {
+		} else if (pek == PARSE_EXPR_PARS) {
 			if (peek(p).kind == TOK_CPAR) break;
 		} else if (pek == PARSE_EXPR_ARGS) {
 			if (peek(p).kind == TOK_COM ||
 				peek(p).kind == TOK_CSQBRA ||
 				peek(p).kind == TOK_CBRA ||
 				peek(p).kind == TOK_CPAR) break;
-		} else if (pek == PARSE_EXPR_OBRA) {
-			if (peek(p).kind == TOK_OBRA) break;
-		} else if (pek == PARSE_EXPR_SQBRA) {
+		} else if (pek == PARSE_EXPR_BODY) {
+			if (peek(p).kind == TOK_ARROW_EQ ||
+				peek(p).kind == TOK_ARROW ||
+				peek(p).kind == TOK_OBRA) break;
+		} else if (pek == PARSE_EXPR_SQBRAS) {
 			if (peek(p).kind == TOK_CSQBRA) break;
 		}
 
 		switch (peek(p).kind) {
 			case TOK_OSQBRA: {
-				if (nodes.count) {
+				if (nodes.count > 0) {
 					if (da_last(&nodes)->kind == AST_VAR) {
-						da_append(&nodes, ast({
+						da_append(&nodes, ast_alloc((AST){
 							.kind = AST_BIN_EXPR,
+							.loc = next(p).loc,
 							.as.bin_expr.op = AST_OP_ARR,
 						}));
 
-						next(p);
-						da_append(&nodes, parse_expr(p, PARSE_EXPR_SQBRA));
+						da_append(&nodes, parse_expr(p, PARSE_EXPR_SQBRAS));
+						if (p->ec.got_err) return NULL;
 						break;
 					}
 				}
@@ -351,7 +395,7 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 			} break;
 
 			case TOK_STRING: {
-				da_append(&nodes, ast({
+				da_append(&nodes, ast_alloc((AST){
 					.kind = AST_LIT,
 					.loc = peek(p).loc,
 					.as.lit.kind = LITERAL_STR,
@@ -361,7 +405,7 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 
 			case TOK_FALSE:
 			case TOK_TRUE: {
-				da_append(&nodes, ast({
+				da_append(&nodes, ast_alloc((AST){
 					.kind = AST_LIT,
 					.loc = peek(p).loc,
 					.as.lit.kind = LITERAL_BOOL,
@@ -375,15 +419,14 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 
 			case TOK_OPAR: {
 				next(p);
-				da_append(&nodes, parse_expr(p, PARSE_EXPR_CPAR));
+				da_append(&nodes, parse_expr(p, PARSE_EXPR_PARS));
 			} break;
 
 			case TOK_ID: {
-				AST_Symbol *vs = symbol_stack_get(&p->stack, peek(p));
 				if (peek2(p).kind == TOK_OPAR) {
 					da_append(&nodes, parse_func_call(p));
 				} else {
-					da_append(&nodes, ast({
+					da_append(&nodes, ast_alloc((AST){
 						.kind = AST_VAR,
 						.loc = peek(p).loc,
 						.as.var = peek(p).data,
@@ -392,7 +435,7 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 			} break;
 
 			case TOK_INT: {
-				da_append(&nodes, ast({
+				da_append(&nodes, ast_alloc((AST){
 					.kind = AST_LIT,
 					.loc = peek(p).loc,
 					.as.lit.kind = LITERAL_INT,
@@ -401,7 +444,7 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 			} break;
 
 			case TOK_FLOAT: {
-				da_append(&nodes, ast({
+				da_append(&nodes, ast_alloc((AST){
 					.kind = AST_LIT,
 					.loc = peek(p).loc,
 					.as.lit.kind = LITERAL_FLOAT,
@@ -417,81 +460,106 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 			case TOK_EQ: case TOK_OR:
 			case TOK_COL: {
 				TokenKind tk = peek(p).kind;
-				da_append(&nodes, ast({
+				da_append(&nodes, ast_alloc((AST){
 					.kind = AST_BIN_EXPR,
 					.loc = peek(p).loc,
 					.as.bin_expr.op =
-						tk == TOK_LESS     ? AST_OP_LESS     :
-						tk == TOK_LESS_EQ  ? AST_OP_LESS_EQ  :
-						tk == TOK_GREAT    ? AST_OP_GREAT    :
-						tk == TOK_GREAT_EQ ? AST_OP_GREAT_EQ :
-						tk == TOK_COL      ? AST_OP_PAIR     :
-						tk == TOK_EQ_EQ    ? AST_OP_IS_EQ    :
-						tk == TOK_AND      ? AST_OP_AND      :
-						tk == TOK_OR       ? AST_OP_OR       :
-						tk == TOK_EQ       ? AST_OP_EQ       :
-						tk == TOK_PLUS     ? AST_OP_ADD      :
-						tk == TOK_MINUS    ? AST_OP_SUB      :
-						tk == TOK_STAR     ? AST_OP_MUL      :
-						tk == TOK_SLASH    ? AST_OP_DIV      : 0,
+					tk == TOK_LESS     ? AST_OP_LESS     :
+					tk == TOK_LESS_EQ  ? AST_OP_LESS_EQ  :
+					tk == TOK_GREAT    ? AST_OP_GREAT    :
+					tk == TOK_GREAT_EQ ? AST_OP_GREAT_EQ :
+					tk == TOK_COL      ? AST_OP_PAIR     :
+					tk == TOK_EQ_EQ    ? AST_OP_IS_EQ    :
+					tk == TOK_AND      ? AST_OP_AND      :
+					tk == TOK_OR       ? AST_OP_OR       :
+					tk == TOK_EQ       ? AST_OP_EQ       :
+					tk == TOK_PLUS     ? AST_OP_ADD      :
+					tk == TOK_MINUS    ? AST_OP_SUB      :
+					tk == TOK_STAR     ? AST_OP_MUL      :
+					tk == TOK_SLASH    ? AST_OP_DIV      : 0,
 				}));
 			} break;
 
-			default:
-			   lexer_error(peek(p).loc, "error: wrong expression");
+			default: {
+				if (peek(p).kind == TOK_ERR) {
+					parser_error(p, peek(p).loc, peek(p).data);
+					return NULL;
+				}
+
+				parser_error(p, peek(p).loc, "wrong expression");
+				return NULL;
+			}
 		}
 
 		next(p);
 	}
 
-	return parse_expand(&nodes);
+	return parse_expand(p, &nodes);
 }
 
 AST *parse_func_ret(Parser *p) {
-	AST *fr = ast({
+	AST *func = ast_alloc((AST){
 		.kind = AST_RET,
 		.loc = next(p).loc,
 	});
 
-	fr->as.ret.expr = parse_expr(p, PARSE_EXPR_SEMI);
-	return fr;
+	func->as.ret.expr = parse_expr(p, PARSE_EXPR_STMT);
+	return func;
 }
 
 AST *parse_var_def_assign(Parser *p) {
-	AST *vd = ast({
+	AST *var_def = ast_alloc((AST){
 		.kind = AST_VAR_DEF,
+		.loc = peek(p).loc,
 		.as.var_def.id = next(p).data,
 	});
 
 	expect(p, TOK_ASSIGN);
 	next(p);
 
-	vd->as.var_def.expr = parse_expr(p, PARSE_EXPR_SEMI);
-	symbol_stack_add(&p->stack, (AST_Symbol){
-		.kind = AST_SYMB_VAR,
-		.id = vd->as.var_def.id,
-	});
-	return vd;
+	var_def->as.var_def.expr = parse_expr(p, PARSE_EXPR_STMT);
+	if (p->ec.got_err) return NULL;
+	return var_def;
 }
 
 AST *parse_var_mut(Parser *p) {
-	AST *vm = ast({
+	AST *var_mut = ast_alloc((AST){
 		.kind = AST_VAR_MUT,
-		.as.var_mut = parse_expr(p, PARSE_EXPR_SEMI),
+		.loc = peek(p).loc,
+		.as.var_mut = parse_expr(p, PARSE_EXPR_STMT),
 	});
 
-	return vm;
+	return var_mut;
 }
 
 AST *parse_body(Parser *p, bool isProg) {
-	AST *body = ast({.kind = AST_BODY});
+	bool is_arrow    = false;
+	bool is_arrow_eq = false;
+
+	AST *body = ast_alloc((AST){
+		.kind = AST_BODY,
+		.loc = peek(p).loc,
+	});
+
 	if (!isProg) {
-		expect(p, TOK_OBRA);
+		if (!(peek(p).kind == TOK_OBRA ||
+			peek(p).kind == TOK_ARROW ||
+			peek(p).kind == TOK_ARROW_EQ)) {
+			parser_error(p, peek(p).loc, "wrong body declaration");
+			return NULL;
+		}
+
+		if (peek(p).kind == TOK_ARROW)
+			is_arrow = true;
+		else if (peek(p).kind == TOK_ARROW_EQ)
+			is_arrow_eq = true;
+
 		next(p);
 	}
 
 	while ((!isProg && peek(p).kind != TOK_CBRA) ||
 		(isProg && peek(p).kind != TOK_EOF)) {
+		if (p->ec.got_err) return NULL;
 		switch (peek(p).kind) {
 			case TOK_ID: {
 				if (peek2(p).kind == TOK_ASSIGN)
@@ -516,16 +584,50 @@ AST *parse_body(Parser *p, bool isProg) {
 				da_append(&body->as.body, parse_while_stmt(p));
 			} break;
 
+			case TOK_FOR_SYM: {
+				da_append(&body->as.body, parse_for_stmt(p));
+			} break;
+
 			case TOK_BREAK: {
-				da_append(&body->as.body, ast({.kind = AST_BREAK, .loc = next(p).loc}));
+				da_append(&body->as.body, ast_alloc((AST){
+					.kind = AST_BREAK,
+					.loc = next(p).loc
+				}));
 			} break;
 
 			case TOK_CONTINUE: {
-				da_append(&body->as.body, ast({.kind = AST_CONT, .loc = next(p).loc}));
+				da_append(&body->as.body, ast_alloc((AST){
+					.kind = AST_CONT,
+					.loc = next(p).loc
+				}));
 			} break;
 
-			default:
-				lexer_error(peek(p).loc, "error: unknown body level declaration");
+			default: {
+				if (peek(p).kind == TOK_ERR) {
+					parser_error(p, peek(p).loc, peek(p).data);
+					return NULL;
+				}
+
+				da_append(&body->as.body, parse_var_mut(p));
+				if(p->ec.got_err) return NULL;
+			}
+		}
+
+		if (is_arrow) break;
+		if (is_arrow_eq) {
+			AST *var_mut = da_last(&body->as.body);
+			if (var_mut->kind != AST_VAR_MUT) {
+				parser_error(p, var_mut->loc, "expression expected");
+				return NULL;
+			}
+
+			body->as.body.count = 0;
+			da_append(&body->as.body, ast_alloc((AST){
+				.kind = AST_RET,
+				.loc = body->loc,
+				.as.ret = var_mut->as.var_mut,
+			}));
+			break;
 		}
 
 		next(p);
@@ -535,7 +637,7 @@ AST *parse_body(Parser *p, bool isProg) {
 }
 
 AST *parse(Parser *p) {
-	AST *prog = ast({.kind = AST_PROG});
+	AST *prog = ast_alloc((AST){.kind = AST_PROG});
 	prog->as.prog.body = parse_body(p, true);
 	return prog;
 }

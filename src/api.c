@@ -32,39 +32,68 @@ typedef struct {
 
 extern void reg_stdlib(Parser *p, EvalCtx *ctx);
 
-EpslCtx *epsl_from_str(char *code) {
+EpslCtx *epsl_from_str(EpslErrorFn errf, char *code) {
 	EpslCtxR *ctx = malloc(sizeof(EpslCtxR));
-	ctx->parser = (Parser){lexer_init("script", code)};
-	ctx->eval_ctx = (EvalCtx){0};
+	ctx->parser = (Parser){
+		.lexer = lexer_init("script", code),
+		.ec.errf = (ErrorFn) errf,
+	};
+
+	ctx->eval_ctx = (EvalCtx){
+		.ec.errf = (ErrorFn) errf,
+		.stack = {0},
+	};
+
 	reg_stdlib(&ctx->parser, &ctx->eval_ctx);
 	return ctx;
 }
 
-EpslCtx *epsl_from_file(char *filename) {
+EpslCtx *epsl_from_file(EpslErrorFn errf, char *filename) {
 	char *code = read_file(filename);
 	if (!code) return NULL;
 
 	EpslCtxR *ctx = malloc(sizeof(EpslCtxR));
-	ctx->parser = (Parser){lexer_init(filename, code)};
-	ctx->eval_ctx = (EvalCtx){0};
+	ctx->parser = (Parser){
+		.lexer = lexer_init(filename, code),
+		.ec.errf = (ErrorFn) errf,
+	};
+
+	ctx->eval_ctx = (EvalCtx){
+		.ec.errf = (ErrorFn) errf,
+		.stack = {0},
+	};
+
 	reg_stdlib(&ctx->parser, &ctx->eval_ctx);
 	return ctx;
 }
 
-void epsl_reg_func(EpslCtx *ctx, EpslRegFunc rf, char *name,
-		EpslFuncArgsKind fk, size_t cnt) {
+void epsl_reg_func(EpslCtx *ctx, const char *id, EpslRegFunc rf) {
 	EpslCtxR *rctx = ctx;
-	reg_func(&rctx->parser, &rctx->eval_ctx, (RegFunc)rf, name, (int)fk, cnt);
+	reg_func(&rctx->eval_ctx, id, (RegFunc) rf);
 }
 
-EpslVal epsl_eval(EpslCtx *ctx) {
+void epsl_reg_var(EpslCtx *ctx, const char *id, EpslVal val) {
+	EpslCtxR *rctx = ctx;
+	Val ev; memcpy(&ev, &val, sizeof(ev));
+	reg_var(&rctx->eval_ctx, id, ev);
+}
+
+EpslResult epsl_eval(EpslCtx *ctx) {
 	EpslCtxR *rctx = ctx;
 	AST *ast = parse(&rctx->parser);
-	Val rv = eval(&rctx->eval_ctx, ast);
+	if (rctx->parser.ec.got_err)
+		return (EpslResult){.got_err = true};
 
 	EpslVal erv;
+	Val rv = eval(&rctx->eval_ctx, ast);
+	if (rctx->eval_ctx.ec.got_err)
+		return (EpslResult){.got_err = true};
+
 	memcpy(&erv, &rv, sizeof(rv));
-	return erv;
+	return (EpslResult){
+		.val = erv,
+		.got_err = true
+	};
 }
 
 void epsl_print_ast(EpslCtx *ctx) {

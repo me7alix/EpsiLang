@@ -1,7 +1,8 @@
 #ifndef LEXER_H
 #define LEXER_H
 
-#include <stdlib.h>
+#include "err.h"
+#include <stdbool.h>
 
 typedef enum {
 	TOK_EOF, TOK_CPAR, TOK_OPAR, TOK_ID, TOK_STRUCT, TOK_ASSIGN, TOK_EXTERN,
@@ -13,15 +14,8 @@ typedef enum {
 	TOK_CSQBRA, TOK_CBRA, TOK_DOT, TOK_PLUS_EQ, TOK_MINUS_EQ, TOK_STAR_EQ,
 	TOK_SLASH_EQ, TOK_BREAK, TOK_CONTINUE, TOK_IMPORT, TOK_MACRO,  TOK_XOR,
 	TOK_ELSE_SYM, TOK_PS, TOK_ANY, TOK_FUNC, TOK_LEFT_SHIFT, TOK_RIGHT_SHIFT,
-	TOK_TILDA,
+	TOK_TILDA, TOK_ERR, TOK_ARROW, TOK_ARROW_EQ,
 } TokenKind;
-
-typedef struct {
-	char *file;
-	size_t line_num;
-	char *line_start;
-	char *line_char;
-} Location;
 
 typedef struct {
 	TokenKind kind;
@@ -38,7 +32,6 @@ Lexer lexer_init(char *file, char *code);
 Token lexer_next(Lexer *l);
 Token lexer_peek(Lexer *l);
 Token lexer_peek2(Lexer *l);
-void lexer_error(Location loc, char *error);
 void lexer_free(Lexer *lexer);
 
 #endif

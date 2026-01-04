@@ -11,7 +11,7 @@ Check the [examples](./examples) directory to see what’s currently implemented
 
 ## Build
 ```
-cc -o epsl src/* -lm
+cc -o epsl src/*
 ./epsl examples/build_lib.epsl
 ```
 First, we build the interpreter as a CLI tool, then as a library using the interpreter itself.

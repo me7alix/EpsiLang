@@ -4,6 +4,37 @@
 #include <string.h>
 #include "../include/api.h"
 
+void print_error(EpslLocation loc, EpslErrorKind ek, char *msg) {
+	size_t lines_num = loc.line_num + 1;
+	size_t chars_num = loc.line_char - loc.line_start + 1;
+	const char *err_type =
+		ek == EPSL_ERROR_COMPTIME ? "comptime error:" :
+		ek == EPSL_ERROR_RUNTIME  ? "runtime error:"  : "";
+
+	printf("\n%s:%zu:%zu: %s %s\n", loc.file, lines_num, chars_num, err_type, msg);
+
+	loc.line_char = loc.line_start;
+	char err_ptr[128];
+	size_t cnt = 0;
+
+	while (*loc.line_char != '\n' && *loc.line_char != '\0'){
+		printf("%c", *loc.line_char);
+		if (cnt < chars_num - 1) {
+			if (*loc.line_char != '\t')
+				err_ptr[cnt++] = ' ';
+			else
+				err_ptr[cnt++] = '\t';
+		}
+
+		loc.line_char++;
+	}
+
+	printf("\n");
+	err_ptr[cnt++] = '^';
+	err_ptr[cnt] = '\0';
+	printf("%s\n", err_ptr);
+}
+
 void print_usage() {
 	printf(
 		"Usage: [options] file\n"
@@ -47,7 +78,7 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 
-	EpslCtx *ctx = epsl_from_file(input_file);
+	EpslCtx *ctx = epsl_from_file(print_error, input_file);
 	if (print_toks) epsl_print_tokens(ctx);
 	else if (print_ast) epsl_print_ast(ctx);
 	else epsl_eval(ctx);

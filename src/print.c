@@ -18,6 +18,10 @@ void ast_print(AST *n, int spaces) {
 	const int gap = 2;
 	print_spaces(spaces);
 
+	size_t ln = n->loc.line_num + 1;
+	size_t lc = n->loc.line_char - n->loc.line_start + 1;
+	printf("[%zu:%zu] ", ln, lc);
+
 	switch (n->kind) {
 		case AST_PROG: {
 			printf("prog:\n");
@@ -66,8 +70,8 @@ void ast_print(AST *n, int spaces) {
 
 		case AST_FUNC_DEF: {
 			printf("func_def(");
-			da_foreach (char*, it, &n->as.func_def.args) {
-				printf("%s", *it);
+			da_foreach (AST*, it, &n->as.func_def.args) {
+				printf("%s", (*it)->as.var);
 				if (it - n->as.func_def.args.items != n->as.func_def.args.count - 1)
 					printf(", ");
 			}
@@ -106,7 +110,8 @@ void ast_print(AST *n, int spaces) {
 			printf("st_if:\n");
 			ast_print(n->as.st_if_chain.cond, spaces + gap);
 			ast_print(n->as.st_if_chain.body, spaces + gap);
-			ast_print(n->as.st_if_chain.chain, spaces + gap);
+			if (n->as.st_if_chain.chain)
+				ast_print(n->as.st_if_chain.chain, spaces + gap);
 		} break;
 
 		case AST_ST_ELSE: {
@@ -130,6 +135,20 @@ void ast_print(AST *n, int spaces) {
 			printf("dict:\n");
 			da_foreach (AST*, it, &n->as.list)
 				ast_print(*it, spaces + gap);
+		} break;
+
+		case AST_ST_FOR: {
+			printf("for(%s):\n", n->as.st_for.var_id);
+			ast_print(n->as.st_for.coll, gap);
+			ast_print(n->as.st_for.body, gap);
+		} break;
+
+		case AST_BREAK: {
+			printf("break");
+		} break;
+
+		case AST_CONT: {
+			printf("continue");
 		} break;
 
 		default: assert(0);
