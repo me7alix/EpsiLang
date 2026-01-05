@@ -79,6 +79,11 @@ int main(int argc, char *argv[]) {
 	}
 
 	EpslCtx *ctx = epsl_from_file(print_error, input_file);
+	if (!ctx) {
+		fprintf(stderr, "No such file...\n");
+		return 1;
+	}
+
 	if (print_toks) epsl_print_tokens(ctx);
 	else if (print_ast) epsl_print_ast(ctx);
 	else epsl_eval(ctx);

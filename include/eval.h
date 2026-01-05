@@ -2,15 +2,31 @@
 #define EXEC_H
 
 #include <stdbool.h>
-#include "../include/parser.h"
+#include <stddef.h>
 #include "err.h"
+#include "../include/parser.h"
+
+typedef struct {
+	bool marked;
+	u8 val_kind;
+	void *data;
+} GC_Object;
+
+#define GC_INIT_THRESHOLD 128
+#define GC_GROWTH_FACTOR 2
+#define GC_MIN_GROWTH 32
+
+typedef struct {
+	DA(GC_Object*) objs;
+	size_t threshold;
+} GarbageCollector;
 
 typedef struct Val Val;
 typedef DA(Val) Vals;
-typedef Val (*RegFunc)(Location call_loc, ErrorCtx *ec, Vals args);
 
 struct Val {
-	enum {
+	enum : u8 {
+		VAL_NONE,
 		VAL_INT,
 		VAL_FLOAT,
 		VAL_BOOL,
@@ -23,16 +39,23 @@ struct Val {
 		long long vint;
 		double vfloat;
 		bool vbool;
-		Vals *list;
-		void *dict;
-		StringBuilder *str;
+		GC_Object *gc_obj;
 	} as;
 };
+
+typedef struct EvalCtx EvalCtx;
+typedef Val (*RegFunc)(EvalCtx *ctx, Location call_loc, Vals args);
+
+#define NULL_VAL ((Val){0})
+#define VDICT(v) ((ValDict*)v.as.gc_obj->data)
+#define VLIST(v) ((Vals*)v.as.gc_obj->data)
+#define VSTR(v) ((StringBuilder*)v.as.gc_obj->data)
 
 HT_DECL(ValDict, Val, Val);
 
 typedef struct {
 	enum {
+		EVAL_SYMB_TEMP,
 		EVAL_SYMB_VAR,
 		EVAL_SYMB_FUNC,
 		EVAL_SYMB_REG_FUNC,
@@ -40,29 +63,30 @@ typedef struct {
 	char *id;
 
 	union {
-		struct {
-			Val val;
-		} var;
-		struct {
-			AST *node;
-		} func;
+		struct { Val val;   } var;
+		struct { Val val;   } temp;
+		struct { AST *node; } func;
 		RegFunc reg_func;
 	} as;
 } EvalSymbol;
 
 typedef DA(EvalSymbol) EvalStack;
 
-typedef struct {
-	enum {
-		EXEC_CTX_NONE,
-		EXEC_CTX_RET,
-		EXEC_CTX_BREAK,
-		EXEC_CTX_CONT,
+struct EvalCtx {
+	enum : u8 {
+		EVAL_CTX_NONE,
+		EVAL_CTX_RET,
+		EVAL_CTX_BREAK,
+		EVAL_CTX_CONT,
 	} state;
 
+	GarbageCollector gc;
 	EvalStack stack;
-	ErrorCtx ec;
-} EvalCtx;
+	ErrorCtx err;
+};
+
+void eval_collect_garbage(EvalCtx *ctx);
+Val eval_new_heap_val(EvalCtx *ctx, u8 kind);
 
 Val eval(EvalCtx *ctx, AST *n);
 void reg_var(EvalCtx *ctx, const char *id, Val val);

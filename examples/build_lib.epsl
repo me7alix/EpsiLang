@@ -36,8 +36,9 @@ fn path(...) {
 cmd_debug_mode := false;
 fn cmd(...) {
 	command := join(_VA_ARGS_);
-	if cmd_debug_mode -> print(command);
-	else              -> system(command);
+	print("[CMD] " + command);
+	if cmd_debug_mode == false ->
+		system(command);
 }
 
 fn make_dir(dir_name) {

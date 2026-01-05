@@ -1,37 +1,69 @@
 #include <assert.h>
+#include <stddef.h>
 #include "../include/eval.h"
 
 HT_IMPL(ValDict, Val, Val);
 
+#define is_heap_val(vk) ( \
+	(vk) == VAL_DICT || \
+	(vk) == VAL_STR || \
+	(vk) == VAL_LIST)
+
+GC_Object *eval_gc_alloc(EvalCtx *ctx, int val_kind);
+
+void eval_stack_add(EvalCtx *ctx, EvalSymbol es) {
+	da_append(&ctx->stack, es);
+}
+
+Val eval_new_heap_val(EvalCtx *ctx, u8 kind) {
+	Val hv = {
+		.kind = kind,
+		.as.gc_obj = eval_gc_alloc(ctx, kind),
+	};
+
+	eval_stack_add(ctx, (EvalSymbol){
+		.kind = EVAL_SYMB_TEMP,
+		.id = "",
+		.as.temp.val = hv,
+	});
+
+	return hv;
+}
+
 void eval_error(EvalCtx *ctx, Location loc, char *msg) {
-	ctx->ec.got_err = true;
-	ctx->ec.errf(loc, ERROR_RUNTIME, msg);
+	ctx->err.got_err = true;
+	ctx->err.errf(loc, ERROR_RUNTIME, msg);
+}
+
+EvalSymbol *eval_stack_get(EvalCtx *es, char *id) {
+	for (int i = es->stack.count - 1; i >= 0; i--) {
+		if (strcmp(da_get(&es->stack, i).id, id) == 0) {
+			return &da_get(&es->stack, i);
+		}
+	}
+
+	return NULL;
 }
 
 u64 ValDict_hashf(Val key) {
 	switch (key.kind) {
-		case VAL_INT:
-			return numhash(key.as.vint);
-
-		case VAL_FLOAT:
-			return numhash(key.as.vint);
-
-		case VAL_BOOL:
-			return numhash(key.as.vbool);
-
-		case VAL_STR:
-			return strhash(key.as.str->items);
+		case VAL_INT:   return numhash(key.as.vint);
+		case VAL_FLOAT: return numhash(key.as.vint);
+		case VAL_BOOL:  return numhash(key.as.vbool);
+		case VAL_STR:   return strhash(VSTR(key)->items);
 
 		case VAL_LIST: {
 			u64 hash = 0;
-			da_foreach (Val, v, key.as.list)
+			da_foreach (Val, v, VLIST(key)) {
 				hash_combine(hash, ValDict_hashf(*v));
+			}
+
 			return hash;
 		} break;
 
 		case VAL_DICT: {
 			u64 hash = 0;
-			ht_foreach_node (ValDict, (ValDict*)key.as.dict, n) {
+			ht_foreach_node (ValDict, VDICT(key), n) {
 				hash_combine(hash, ValDict_hashf(n->key));
 				hash_combine(hash, ValDict_hashf(n->val));
 			}
@@ -45,24 +77,17 @@ int ValDict_compare(Val a, Val b) {
 	if (a.kind != b.kind) return 1;
 
 	switch (a.kind) {
-		case VAL_INT:
-			return a.as.vint != b.as.vint;
-
-		case VAL_FLOAT:
-			return a.as.vfloat != b.as.vfloat;
-
-		case VAL_BOOL:
-			return a.as.vbool != b.as.vbool;
-
-		case VAL_STR:
-			return strcmp(a.as.str->items, b.as.str->items);
+		case VAL_INT:   return a.as.vint != b.as.vint;
+		case VAL_FLOAT: return a.as.vfloat != b.as.vfloat;
+		case VAL_BOOL:  return a.as.vbool != b.as.vbool;
+		case VAL_STR:   return strcmp(VSTR(a)->items, VSTR(b)->items);
 
 		case VAL_LIST: {
-			if (a.as.list->count != b.as.list->count)
+			if (VLIST(a)->count != VLIST(b)->count)
 				return 1;
 
-			for (size_t i = 0; i < a.as.list->count; i++) {
-				if (ValDict_compare(a.as.list->items[i], b.as.list->items[i]) != 0)
+			for (size_t i = 0; i < VLIST(a)->count; i++) {
+				if (ValDict_compare(VLIST(a)->items[i], VLIST(b)->items[i]) != 0)
 					return 1;
 			}
 
@@ -70,11 +95,11 @@ int ValDict_compare(Val a, Val b) {
 		} break;
 
 		case VAL_DICT: {
-			if (((ValDict*)a.as.dict)->count != ((ValDict*)a.as.dict)->count)
+			if (VDICT(a)->count != VDICT(b)->count)
 				return 1;
 
-			ht_foreach_node (ValDict, (ValDict*)a.as.dict, n) {
-				Val *bv = ValDict_get((ValDict*)b.as.dict, n->key);
+			ht_foreach_node (ValDict, VDICT(a), n) {
+				Val *bv = ValDict_get(VDICT(b), n->key);
 				if (!bv) return 1;
 				if (ValDict_compare(n->val, *bv) != 0) return 1;
 			}
@@ -90,7 +115,7 @@ int ValDict_compare(Val a, Val b) {
 	(v).kind == VAL_BOOL  ? (v).as.vbool  : \
 	(assert(!"wrong val"), 0))
 
-#define binop(op, l, r) \
+#define binop(ctx, op_loc, op, l, r) ( \
 	op == AST_OP_ADD      ? l +  r : \
 	op == AST_OP_SUB      ? l -  r : \
 	op == AST_OP_MUL      ? l *  r : \
@@ -103,56 +128,50 @@ int ValDict_compare(Val a, Val b) {
 	op == AST_OP_LESS_EQ  ? l <= r : \
 	op == AST_OP_AND      ? l && r : \
 	op == AST_OP_OR       ? l || r : \
-	(assert(!"wrong binop"), 0)
+	(eval_error(ctx, op_loc, "wrong operator"), 0))
 
-Val eval_binop(AST_Op op, Val lv, Val rv) {
+Val eval_binop(EvalCtx *ctx, AST *n) {
+	AST_Op op = n->as.bin_expr.op;
+	Val lv = eval(ctx, n->as.bin_expr.lhs);
+	if (ctx->err.got_err) return NULL_VAL;
+	Val rv = eval(ctx, n->as.bin_expr.rhs);
+	if (ctx->err.got_err) return NULL_VAL;
 	int lk = lv.kind, rk = rv.kind;
-	if (lk == VAL_STR && rk == VAL_STR && op == AST_OP_IS_EQ) {
+
+	if (lk == VAL_NONE && rk == VAL_NONE) {
+		eval_error(ctx, n->loc, "wrong value");
+	} else if (lk == VAL_STR && rk == VAL_STR && op == AST_OP_IS_EQ) {
 		return (Val){
 			.kind = VAL_BOOL,
-			.as.vbool = strcmp(lv.as.str->items, rv.as.str->items) == 0,
+			.as.vbool = strcmp(VSTR(lv)->items, VSTR(rv)->items) == 0,
 		};
 	} else if (op == AST_OP_IS_EQ || op == AST_OP_NOT_EQ ||
 		op == AST_OP_AND || op == AST_OP_OR ||
 		op == AST_OP_GREAT || op == AST_OP_GREAT_EQ ||
 		op == AST_OP_LESS || op == AST_OP_LESS_EQ) {
-		return (Val){VAL_BOOL, .as.vbool = binop(op, val_get(lv), val_get(rv))};
-	} else if (lk == VAL_STR && rk == VAL_STR && op == AST_OP_ADD) {
-		StringBuilder *str = malloc(sizeof(*str));
-		*str = (StringBuilder){0};
-		sb_appendf(str, "%s%s", lv.as.str->items, rv.as.str->items);
-
 		return (Val){
-			.kind = VAL_STR,
-			.as.str = str,
+			.kind = VAL_BOOL,
+			.as.vbool = binop(ctx, n->loc, op, val_get(lv), val_get(rv))
 		};
+	} else if (lk == VAL_STR && rk == VAL_STR && op == AST_OP_ADD) {
+		Val str = eval_new_heap_val(ctx, VAL_STR);
+		sb_appendf(VSTR(str), "%s%s", VSTR(lv)->items, VSTR(rv)->items);
+		return str;
 	} else if (lk == VAL_INT && rk == VAL_INT && op != AST_OP_DIV) {
-		return (Val){VAL_INT, .as.vint = binop(op, val_get(lv), val_get(rv))};
+		return (Val){VAL_INT, .as.vint = binop(ctx, n->loc, op, val_get(lv), val_get(rv))};
 	} else if (lk == VAL_DICT && op == AST_OP_ARR) {
-		return *ValDict_get((ValDict*) lv.as.dict, rv);
+		return *ValDict_get(VDICT(lv), rv);
 	} else if (lk == VAL_LIST && rk == VAL_INT && op == AST_OP_ARR) {
-		return da_get(lv.as.list, rv.as.vint);
-	} else {
-		return (Val){VAL_FLOAT, .as.vfloat = binop(op, val_get(lv), val_get(rv))};}
-}
-
-void eval_stack_add(EvalStack *es, EvalSymbol esmbl) {
-	da_append(es, esmbl);
-}
-
-EvalSymbol *eval_stack_get(EvalStack *es, char *id) {
-	for (int i = es->count - 1; i >= 0; i--) {
-		if (strcmp(da_get(es, i).id, id) == 0) {
-			return &da_get(es, i);
-		}
-	}
-
-	return NULL;
+		return da_get(VLIST(lv), rv.as.vint);
+	} else return (Val){
+		.kind = VAL_FLOAT,
+		.as.vfloat = binop(ctx, n->loc, op, val_get(lv), val_get(rv))
+	};
 }
 
 Val eval(EvalCtx *ctx, AST *n) {
-	if (ctx->ec.got_err)
-		return (Val){0};
+	if (ctx->err.got_err)
+		return NULL_VAL;
 
 	switch (n->kind) {
 		case AST_PROG:
@@ -162,10 +181,10 @@ Val eval(EvalCtx *ctx, AST *n) {
 			size_t stack_size = ctx->stack.count;
 			da_foreach (AST*, it, &n->as.body) {
 				Val res = eval(ctx, *it);
-				if (ctx->ec.got_err) return (Val){0};
-				if (ctx->state == EXEC_CTX_RET ||
-					ctx->state == EXEC_CTX_CONT ||
-					ctx->state == EXEC_CTX_BREAK) {
+				if (ctx->err.got_err) return NULL_VAL;
+				if (ctx->state == EVAL_CTX_RET ||
+					ctx->state == EVAL_CTX_CONT ||
+					ctx->state == EVAL_CTX_BREAK) {
 					ctx->stack.count = stack_size;
 					return res;
 				}
@@ -175,14 +194,14 @@ Val eval(EvalCtx *ctx, AST *n) {
 		} break;
 
 		case AST_VAR_DEF: {
-			eval_stack_add(&ctx->stack, (EvalSymbol){
+			eval_stack_add(ctx, (EvalSymbol){
 				.kind = EVAL_SYMB_VAR,
 				.id = n->as.var_def.id,
 				.as.var.val = eval(ctx, n->as.var_def.expr),
 			});
 
-			if (ctx->ec.got_err)
-				return (Val){0};
+			if (ctx->err.got_err)
+				return NULL_VAL;
 		} break;
 
 		case AST_LIT: {
@@ -206,14 +225,9 @@ Val eval(EvalCtx *ctx, AST *n) {
 					};
 
 				case LITERAL_STR: {
-					StringBuilder *str = malloc(sizeof(*str));
-					*str = (StringBuilder){0};
-					sb_appendf(str, "%s", n->as.lit.as.vstr);
-
-					return (Val){
-						.kind = VAL_STR,
-						.as.str = str,
-					};
+					Val str = eval_new_heap_val(ctx, VAL_STR);
+					sb_appendf(VSTR(str), "%s", n->as.lit.as.vstr);
+					return str;
 				} break;
 
 				default: assert(0);
@@ -221,40 +235,35 @@ Val eval(EvalCtx *ctx, AST *n) {
 		} break;
 
 		case AST_LIST: {
-			Vals *list = malloc(sizeof(Vals));
-			*list = (Vals){0};
-
+			Val list = eval_new_heap_val(ctx, VAL_LIST);
 			da_foreach (AST*, it, &n->as.list) {
-				da_append(list, eval(ctx, *it));
-				if (ctx->ec.got_err) return (Val){0};
+				da_append(VLIST(list), eval(ctx, *it));
+				if (ctx->err.got_err) return NULL_VAL;
 			}
 
-			return (Val){
-				.kind = VAL_LIST,
-				.as.list = list,
-			};
+			return list;
 		} break;
 
 		case AST_DICT: {
-			ValDict *dict = malloc(sizeof(ValDict));
-			*dict = (ValDict){0};
-
+			Val dict = eval_new_heap_val(ctx, VAL_DICT);
 			da_foreach (AST*, it, &n->as.dict) {
 				Val lv = eval(ctx, (*it)->as.bin_expr.lhs);
+				if (ctx->err.got_err) return NULL_VAL;
 				Val rv = eval(ctx, (*it)->as.bin_expr.rhs);
-				if (ctx->ec.got_err) return (Val){0};
-				ValDict_add(dict, lv, rv);
+				if (ctx->err.got_err) return NULL_VAL;
+				ValDict_add(VDICT(dict), lv, rv);
 			}
 
-			return (Val){
-				.kind = VAL_DICT,
-				.as.dict = dict,
-			};
+			return dict;
 		} break;
 
 		case AST_VAR: {
-			EvalSymbol *es = eval_stack_get(&ctx->stack, n->as.var);
-			if (!es) eval_error(ctx, n->loc, "no such symbol");
+			EvalSymbol *es = eval_stack_get(ctx, n->as.var);
+			if (!es) {
+				eval_error(ctx, n->loc, "no such symbol");
+				return NULL_VAL;
+			}
+
 			if (es->kind != EVAL_SYMB_VAR)
 				eval_error(ctx, n->loc, "no such variable");
 			return es->as.var.val;
@@ -266,47 +275,56 @@ Val eval(EvalCtx *ctx, AST *n) {
 					AST *lhs = n->as.bin_expr.lhs;
 					AST *rhs = n->as.bin_expr.rhs;
 					Val rhsv = eval(ctx, rhs);
-					if (ctx->ec.got_err) return (Val){0};
+					if (ctx->err.got_err) return NULL_VAL;
 
 					if (lhs->kind == AST_BIN_EXPR && lhs->as.bin_expr.op == AST_OP_ARR) {
 						char *var_id = lhs->as.bin_expr.lhs->as.var;
+						EvalSymbol *es = eval_stack_get(ctx, var_id);
+						if (!es) {
+							eval_error(ctx, n->loc, "no such symbol");
+							return NULL_VAL;
+						} else if (es->kind != EVAL_SYMB_VAR) {
+							eval_error(ctx, n->loc, "no such variable");
+							return NULL_VAL;
+						}
+
 						Val key = eval(ctx, lhs->as.bin_expr.rhs);
-						if (ctx->ec.got_err) return (Val){0};
-						EvalSymbol *es = eval_stack_get(&ctx->stack, var_id);
+						if (ctx->err.got_err) return NULL_VAL;
+
 						if (es->as.var.val.kind == VAL_LIST) {
-							da_get(es->as.var.val.as.list, key.as.vint) = eval(ctx, rhs);
-							if (ctx->ec.got_err) return (Val){0};
+							da_get(VLIST(es->as.var.val), key.as.vint) = eval(ctx, rhs);
+							if (ctx->err.got_err) return NULL_VAL;
 						} else if (es->as.var.val.kind == VAL_DICT) {
-							Val *val = ValDict_get((ValDict*)es->as.var.val.as.dict, key);
-							if (!val) ValDict_add((ValDict*)es->as.var.val.as.dict, key, rhsv);
+							Val *val = ValDict_get(VDICT(es->as.var.val), key);
+							if (!val) ValDict_add(VDICT(es->as.var.val), key, rhsv);
 							else *val = rhsv;
 						}
 					} else if (lhs->kind == AST_VAR) {
 						char *var_id = n->as.bin_expr.lhs->as.var;
-						EvalSymbol *es = eval_stack_get(&ctx->stack, var_id);
+						EvalSymbol *es = eval_stack_get(ctx, var_id);
 						if (!es) {
 							eval_error(ctx, n->loc, "no such symbol");
-							return (Val){0};
+							return NULL_VAL;
 						} else if (es->kind != EVAL_SYMB_VAR) {
 							eval_error(ctx, n->loc, "no such variable");
-							return (Val){0};
+							return NULL_VAL;
 						}
 
 						es->as.var.val = rhsv;
-					} else assert(!"= is used incorrectly");
+					} else {
+						eval_error(ctx, n->loc, "EQ is used incorrectly");
+						return NULL_VAL;
+					}
 				} break;
 
 				default: {
-					Val lv = eval(ctx, n->as.bin_expr.lhs);
-					Val rv = eval(ctx, n->as.bin_expr.rhs);
-					if (ctx->ec.got_err) return (Val){0};
-					return eval_binop(n->as.bin_expr.op, lv, rv);
+					return eval_binop(ctx, n);
 				}
 			}
 		} break;
 
 		case AST_FUNC_DEF: {
-			eval_stack_add(&ctx->stack, (EvalSymbol){
+			eval_stack_add(ctx, (EvalSymbol){
 				.kind = EVAL_SYMB_FUNC,
 				.id = n->as.func_def.id,
 				.as.func.node = n,
@@ -319,10 +337,10 @@ Val eval(EvalCtx *ctx, AST *n) {
 
 		case AST_ST_IF: {
 			Val cond = eval(ctx, n->as.st_if_chain.cond);
-			if (ctx->ec.got_err) return (Val){0};
+			if (ctx->err.got_err) return NULL_VAL;
 			if (cond.kind != VAL_BOOL) {
 				eval_error(ctx, n->loc, "boolean expected");
-				if (ctx->ec.got_err) return (Val){0};
+				return NULL_VAL;
 			}
 
 			if (cond.as.vbool)
@@ -334,22 +352,24 @@ Val eval(EvalCtx *ctx, AST *n) {
 		case AST_ST_FOR: {
 			char *var_id = n->as.st_for.var_id;
 			Val coll = eval(ctx, n->as.st_for.coll);
-			for (size_t i = 0; i < coll.as.list->count; i++) {
-				Val x = coll.as.list->items[i];
-				eval_stack_add(&ctx->stack, (EvalSymbol){
+			if (ctx->err.got_err) return NULL_VAL;
+
+			for (size_t i = 0; i < VLIST(coll)->count; i++) {
+				Val x = VLIST(coll)->items[i];
+				eval_stack_add(ctx, (EvalSymbol){
 					.kind = EVAL_SYMB_VAR,
 					.id = var_id,
 					.as.var.val = x,
 				});
-				
+
 				Val res = eval(ctx, n->as.st_for.body);
-				if (ctx->ec.got_err) return (Val){0};
+				if (ctx->err.got_err) return NULL_VAL;
 				ctx->stack.count--;
-				if (ctx->state == EXEC_CTX_BREAK) {
-					ctx->state = EXEC_CTX_NONE; break;
-				} else if (ctx->state == EXEC_CTX_CONT) {
-					ctx->state = EXEC_CTX_NONE;
-				} else if (ctx->state == EXEC_CTX_RET) {
+				if (ctx->state == EVAL_CTX_BREAK) {
+					ctx->state = EVAL_CTX_NONE; break;
+				} else if (ctx->state == EVAL_CTX_CONT) {
+					ctx->state = EVAL_CTX_NONE;
+				} else if (ctx->state == EVAL_CTX_RET) {
 					return res;
 				}
 			}
@@ -357,28 +377,28 @@ Val eval(EvalCtx *ctx, AST *n) {
 
 		case AST_ST_WHILE: {
 			Val cond = eval(ctx, n->as.st_while.cond);
-			if (ctx->ec.got_err) return (Val){0};
+			if (ctx->err.got_err) return NULL_VAL;
 			if (cond.kind != VAL_BOOL) {
 				eval_error(ctx, n->loc, "boolean expected");
-				return (Val){0};
+				return NULL_VAL;
 			}
 
 			while (true) {
 				Val cond = eval(ctx, n->as.st_while.cond);
 				if (cond.kind != VAL_BOOL) {
 					eval_error(ctx, n->loc, "boolean expected");
-					return (Val){0};
+					return NULL_VAL;
 				}
 
 				if (!cond.as.vbool) break;
 
 				Val res = eval(ctx, n->as.st_while.body);
-				if (ctx->ec.got_err) return (Val){0};
-				if (ctx->state == EXEC_CTX_BREAK) {
-					ctx->state = EXEC_CTX_NONE; break;
-				} else if (ctx->state == EXEC_CTX_CONT) {
-					ctx->state = EXEC_CTX_NONE;
-				} else if (ctx->state == EXEC_CTX_RET) {
+				if (ctx->err.got_err) return NULL_VAL;
+				if (ctx->state == EVAL_CTX_BREAK) {
+					ctx->state = EVAL_CTX_NONE; break;
+				} else if (ctx->state == EVAL_CTX_CONT) {
+					ctx->state = EVAL_CTX_NONE;
+				} else if (ctx->state == EVAL_CTX_RET) {
 					return res;
 				}
 			}
@@ -386,76 +406,72 @@ Val eval(EvalCtx *ctx, AST *n) {
 
 		case AST_FUNC_CALL: {
 			Val res;
-			EvalSymbol *func = eval_stack_get(&ctx->stack, n->as.func_call.id);
+			EvalSymbol *func = eval_stack_get(ctx, n->as.func_call.id);
 			if (!func) {
 				eval_error(ctx, n->loc, "no such symbol");
-				return (Val){0};
+				return NULL_VAL;
 			}
 
 			AST *func_def = func->as.func.node;
 			bool found_any = false;
-			Vals *fargs = malloc(sizeof(Vals));
-			*fargs = (Vals){0};
+			Val va_args = eval_new_heap_val(ctx, VAL_LIST);
 
 			if (func->kind == EVAL_SYMB_FUNC) {
 				size_t stack_size = ctx->stack.count;
 				for (size_t i = 0; i < n->as.func_call.args.count; i++) {
 					AST *func_call_arg = da_get(&n->as.func_call.args, i);
 
-					found_any: if (found_any) {
-						da_append(fargs, eval(ctx, func_call_arg));
-						if (ctx->ec.got_err) return (Val){0};
+				found_any: if (found_any) {
+						da_append(VLIST(va_args), eval(ctx, func_call_arg));
+						if (ctx->err.got_err) return NULL_VAL;
 						continue;
 					}
 
 					if (i >= func_def->as.func_def.args.count) {
 						eval_error(ctx, n->loc, "wrong amount of arguments");
-						return (Val){0};
+						return NULL_VAL;
 					}
 
 					AST *func_def_arg = da_get(&func_def->as.func_def.args, i);
 					if (func_def_arg->kind == AST_VAR_ANY) {
 						found_any = true;
 						goto found_any;
-						continue;
 					}
 
-					eval_stack_add(&ctx->stack, (EvalSymbol){
+					eval_stack_add(ctx, (EvalSymbol){
 						.kind = EVAL_SYMB_VAR,
 						.id = func_def_arg->as.var,
 						.as.var.val = eval(ctx, func_call_arg),
 					});
 
-					if (ctx->ec.got_err)
-						return (Val){0};
+					if (ctx->err.got_err)
+						return NULL_VAL;
 				}
 
 				if (found_any) {
-					eval_stack_add(&ctx->stack, (EvalSymbol){
+					eval_stack_add(ctx, (EvalSymbol){
 						.kind = EVAL_SYMB_VAR,
 						.id = "_VA_ARGS_",
-						.as.var.val = (Val){
-							.kind = VAL_LIST,
-							.as.list = fargs,
-						},
+						.as.var.val = va_args,
 					});
 				}
 
-				ctx->state = EXEC_CTX_NONE;
+				ctx->state = EVAL_CTX_NONE;
 				res = eval(ctx, func->as.func.node->as.func_def.body);
-				ctx->state = EXEC_CTX_NONE;
+				if (ctx->err.got_err) return NULL_VAL;
+
+				ctx->state = EVAL_CTX_NONE;
 				ctx->stack.count = stack_size;
-				da_free(fargs);
 			} else if (func->kind == EVAL_SYMB_REG_FUNC) {
 				Vals args = {0};
 				da_foreach (AST*, it, &n->as.func_call.args) {
 					da_append(&args, eval(ctx, *it));
-					if (ctx->ec.got_err) return (Val){0};
+					if (ctx->err.got_err) return NULL_VAL;
 				}
 
-				ErrorCtx ec = { .errf = ctx->ec.errf };
-				res = func->as.reg_func(n->loc, &ec, args);
-				if (ec.got_err) ctx->ec.got_err = true;
+				ErrorCtx ec = { .errf = ctx->err.errf };
+				res = func->as.reg_func(ctx, n->loc, args);
+				if (ec.got_err) ctx->err.got_err = true;
 			} else eval_error(ctx, n->loc, "no such function");
 
 			return res;
@@ -464,17 +480,17 @@ Val eval(EvalCtx *ctx, AST *n) {
 		case AST_RET: {
 			if (n->as.ret.expr) {
 				Val v = eval(ctx, n->as.ret.expr);
-				ctx->state = EXEC_CTX_RET;
+				ctx->state = EVAL_CTX_RET;
 				return v;
-			}
+			} else ctx->state = EVAL_CTX_RET;
 		} break;
 
 		case AST_BREAK: {
-			ctx->state = EXEC_CTX_BREAK;
+			ctx->state = EVAL_CTX_BREAK;
 		} break;
 
 		case AST_CONT: {
-			ctx->state = EXEC_CTX_CONT;
+			ctx->state = EVAL_CTX_CONT;
 		} break;
 
 		case AST_VAR_MUT: {
@@ -484,7 +500,124 @@ Val eval(EvalCtx *ctx, AST *n) {
 		default: assert(0);
 	}
 
-	return (Val){0};
+	return NULL_VAL;
+}
+
+GC_Object *eval_gc_alloc(EvalCtx *ctx, int val_kind) {
+	GC_Object *gc_obj = malloc(sizeof(*gc_obj));
+	gc_obj->val_kind = val_kind;
+
+	switch (val_kind) {
+		case VAL_LIST: {
+			gc_obj->data = malloc(sizeof(Vals));
+			*((Vals*)gc_obj->data) = (Vals){0};
+		} break;
+
+		case VAL_DICT: {
+			gc_obj->data = malloc(sizeof(ValDict));
+			*((ValDict*)gc_obj->data) = (ValDict){0};
+		} break;
+
+		case VAL_STR: {
+			gc_obj->data = malloc(sizeof(StringBuilder));
+			*((StringBuilder*)gc_obj->data) = (StringBuilder){0};
+		} break;
+
+		default: assert(0);
+	}
+
+	if (ctx->gc.threshold == 0)
+		ctx->gc.threshold = GC_INIT_THRESHOLD;
+
+	if (ctx->gc.objs.count >= ctx->gc.threshold) {
+		if (ctx->state != EVAL_CTX_RET)
+			eval_collect_garbage(ctx);
+
+		if (ctx->gc.objs.count == 0) {
+			ctx->gc.threshold = GC_INIT_THRESHOLD;
+		} else {
+			size_t v1 = ctx->gc.objs.count * GC_GROWTH_FACTOR;
+			size_t v2 = ctx->gc.objs.count + GC_MIN_GROWTH;
+			ctx->gc.threshold = v1 > v2 ? v1 : v2;
+		}
+	}
+
+	da_append(&ctx->gc.objs, gc_obj);
+	return gc_obj;
+}
+
+void gc_mark(GC_Object *obj) {
+	if (!obj->marked) return;
+	obj->marked = false;
+
+	switch (obj->val_kind) {
+		case VAL_DICT: {
+			ValDict *dict = obj->data;
+			ht_foreach_node (ValDict, dict, it) {
+				if (is_heap_val(it->key.kind))
+					gc_mark(it->key.as.gc_obj);
+				if (is_heap_val(it->val.kind))
+					gc_mark(it->val.as.gc_obj);
+			}
+		} break;
+
+		case VAL_LIST: {
+			Vals *list = obj->data;
+			da_foreach (Val, it, list) {
+				if (is_heap_val(it->kind))
+					gc_mark(it->as.gc_obj);
+			}
+		} break;
+
+		default:;
+	}
+}
+
+void eval_collect_garbage(EvalCtx *ctx) {
+	// mark phase
+	da_foreach (GC_Object*, obj, &ctx->gc.objs) {
+		(*obj)->marked = true;
+	}
+
+	da_foreach (EvalSymbol, es, &ctx->stack) {
+		if (es->kind == EVAL_SYMB_VAR) {
+			if (is_heap_val(es->as.var.val.kind)) {
+				gc_mark(es->as.var.val.as.gc_obj);
+			}
+		} else if (es->kind == EVAL_SYMB_TEMP) {
+			gc_mark(es->as.temp.val.as.gc_obj);
+		}
+	}
+
+	// sweep phase
+	for (size_t i = 0; i < ctx->gc.objs.count; i++) {
+		GC_Object *obj = da_get(&ctx->gc.objs, i);
+		if (obj->marked) {
+			switch (obj->val_kind) {
+				case VAL_DICT: {
+					ValDict *dict = obj->data;
+					ValDict_free(dict);
+				} break;
+
+				case VAL_LIST: {
+					Vals *list = obj->data;
+					da_free(list);
+				} break;
+
+				case VAL_STR: {
+					StringBuilder *str = obj->data;
+					sb_free(str);
+				} break;
+
+				default: assert(0);
+			}
+
+			free(obj->data);
+			free(obj);
+			da_remove_unordered(&ctx->gc.objs, i);
+			i--;
+		}
+	}
 }
 
 void reg_var(EvalCtx *ctx, const char *id, Val val) {

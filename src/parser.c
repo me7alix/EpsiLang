@@ -494,6 +494,9 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 		next(p);
 	}
 
+	if (nodes.count == 0)
+		return NULL;
+
 	return parse_expand(p, &nodes);
 }
 

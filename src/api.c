@@ -40,8 +40,9 @@ EpslCtx *epsl_from_str(EpslErrorFn errf, char *code) {
 	};
 
 	ctx->eval_ctx = (EvalCtx){
-		.ec.errf = (ErrorFn) errf,
+		.err.errf = (ErrorFn) errf,
 		.stack = {0},
+		.gc = {0},
 	};
 
 	reg_stdlib(&ctx->parser, &ctx->eval_ctx);
@@ -59,8 +60,9 @@ EpslCtx *epsl_from_file(EpslErrorFn errf, char *filename) {
 	};
 
 	ctx->eval_ctx = (EvalCtx){
-		.ec.errf = (ErrorFn) errf,
+		.err.errf = (ErrorFn) errf,
 		.stack = {0},
+		.gc = {0},
 	};
 
 	reg_stdlib(&ctx->parser, &ctx->eval_ctx);
@@ -86,7 +88,7 @@ EpslResult epsl_eval(EpslCtx *ctx) {
 
 	EpslVal erv;
 	Val rv = eval(&rctx->eval_ctx, ast);
-	if (rctx->eval_ctx.ec.got_err)
+	if (rctx->eval_ctx.err.got_err)
 		return (EpslResult){.got_err = true};
 
 	memcpy(&erv, &rv, sizeof(rv));
@@ -104,4 +106,12 @@ void epsl_print_ast(EpslCtx *ctx) {
 void epsl_print_tokens(EpslCtx *ctx) {
 	EpslCtxR *rctx = ctx;
 	lexer_print(rctx->parser.lexer);
+}
+
+EpslVal epsl_new_heap_val(EpslCtx *ctx, uint8_t kind) {
+	EpslCtxR *rctx = ctx;
+	Val val = eval_new_heap_val(&rctx->eval_ctx, kind);
+	EpslVal epsl_val;
+	memcpy(&epsl_val, &val, sizeof(val));
+	return epsl_val;
 }

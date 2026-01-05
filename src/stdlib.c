@@ -4,39 +4,33 @@
 #include "../include/parser.h"
 #include "../include/eval.h"
 
+#define bstr(b) (b ? "true" : "false")
+
 #define err(ec, loc, msg) \
 do { \
 	(ec)->got_err = true; \
 	(ec)->errf(loc, ERROR_RUNTIME, msg); \
-	return (Val){0}; \
+	return NULL_VAL; \
 } while(0)
 
 void val_sprint(Val v, char *buf) {
 	switch (v.kind) {
-		case VAL_INT:
-			sprintf(buf, "%lli", v.as.vint);
-			break;
-
-		case VAL_FLOAT:
-			sprintf(buf, "%lf", v.as.vfloat);
-			break;
-
-		case VAL_BOOL:
-			sprintf(buf, "%s", v.as.vbool ? "true" : "false");
-			break;
+		case VAL_INT:   sprintf(buf, "%lli", v.as.vint);      break;
+		case VAL_FLOAT: sprintf(buf, "%lf", v.as.vfloat);     break;
+		case VAL_BOOL:  sprintf(buf, "%s", bstr(v.as.vbool)); break;
 
 		case VAL_STR:
-			sprintf(buf, "%s", v.as.str->items);
+			sprintf(buf, "%s", VSTR(v)->items);
 			break;
 
 		case VAL_LIST: {
 			StringBuilder sb = {0};
 			sb_appendf(&sb, "[");
 
-			da_foreach (Val, it, v.as.list) {
+			da_foreach (Val, it, VLIST(v)) {
 				char buf[1024]; val_sprint(*it, buf);
 				sb_appendf(&sb, "%s", buf);
-				if (it - v.as.list->items != v.as.list->count - 1)
+				if (it - VLIST(v)->items != VLIST(v)->count - 1)
 					sb_appendf(&sb, ", ", buf);
 			}
 
@@ -47,7 +41,7 @@ void val_sprint(Val v, char *buf) {
 
 		case VAL_DICT: {
 			StringBuilder sb = {0};
-			ValDict *dict = v.as.dict;
+			ValDict *dict = VDICT(v);
 			size_t count = 0;
 
 			sb_appendf(&sb, "{");
@@ -72,9 +66,9 @@ void val_sprint(Val v, char *buf) {
 	}
 }
 
-Val Int(Location call_loc, ErrorCtx *ec, Vals args) {
+Val Int(EvalCtx *ctx, Location call_loc, Vals args) {
 	if (args.count != 1)
-		err(ec, call_loc, "int() accepts only 1 argument");
+		err(&ctx->err, call_loc, "int() accepts only 1 argument");
 
 	Val arg = args.items[0];
 	switch (arg.kind) {
@@ -91,26 +85,27 @@ Val Int(Location call_loc, ErrorCtx *ec, Vals args) {
 			char *end;
 			return (Val){
 				.kind = VAL_INT,
-				.as.vint = strtoll(arg.as.str->items, &end, 10),
+				.as.vint = strtoll(VSTR(arg)->items, &end, 10),
 			};
 		}
 
-		default: err(ec, call_loc, "cannot convert to int");
+		default: err(&ctx->err, call_loc, "cannot convert to int");
 	}
 }
 
-Val Len(Location call_loc, ErrorCtx *ec, Vals args) {
+
+Val Len(EvalCtx *ctx, Location call_loc, Vals args) {
 	if (args.count != 1)
-		err(ec, call_loc, "len() accepts only 1 argument");
+		err(&ctx->err, call_loc, "len() accepts only 1 argument");
 
 	Val arg = args.items[0];
 	long long len = 0;
 
 	switch (arg.kind) {
-		case VAL_LIST: len = arg.as.list->count;             break;
-		case VAL_DICT: len = ((ValDict*)arg.as.dict)->count; break;
-		case VAL_STR:  len = arg.as.str->count;              break;
-		default: err(ec, call_loc, "len() accepts only lists, strings and dictionaries");
+		case VAL_LIST: len = VLIST(arg)->count; break;
+		case VAL_DICT: len = VDICT(arg)->count; break;
+		case VAL_STR:  len = VSTR(arg)->count;  break;
+		default: err(&ctx->err, call_loc, "len() accepts only lists, strings and dictionaries");
 	}
 
 	return (Val){
@@ -119,35 +114,30 @@ Val Len(Location call_loc, ErrorCtx *ec, Vals args) {
 	};
 }
 
-Val Str(Location call_loc, ErrorCtx *ec, Vals args) {
+Val Str(EvalCtx *ctx, Location call_loc, Vals args) {
 	if (args.count != 1)
-		err(ec, call_loc, "str() accepts only 1 argument");
+		err(&ctx->err, call_loc, "str() accepts only 1 argument");
 
-	StringBuilder *str = malloc(sizeof(*str));
-	*str = (StringBuilder){0};
+	Val str = eval_new_heap_val(ctx, VAL_STR);
 
 	char buf[1024];
 	val_sprint(args.items[0], buf);
-	sb_appendf(str, "%s", buf);
+	sb_appendf(VSTR(str), "%s", buf);
 
-	return (Val){
-		.kind = VAL_STR,
-		.as.str = str,
-	};
+	return str;
 }
 
-Val Error(Location call_loc, ErrorCtx *ec, Vals args) {
+Val Error(EvalCtx *ctx, Location call_loc, Vals args) {
 	if (args.count != 1)
-		err(ec, call_loc, "error() accepts only 1 argument");
+		err(&ctx->err, call_loc, "error() accepts only 1 argument");
 	if (args.items[0].kind != VAL_STR)
-		err(ec, call_loc, "error() accepts only string");
+		err(&ctx->err, call_loc, "error() accepts only string");
 
-	err(ec, call_loc, args.items[0].as.str->items);
-
-	return (Val){0};
+	err(&ctx->err, call_loc, VSTR(args.items[0])->items);
+	return NULL_VAL;
 }
 
-Val Print(Location call_loc, ErrorCtx *ec, Vals args) {
+Val Print(EvalCtx *ctx, Location call_loc, Vals args) {
 	char buf[1024];
 	da_foreach (Val, it, &args) {
 		val_sprint(*it, buf);
@@ -155,77 +145,75 @@ Val Print(Location call_loc, ErrorCtx *ec, Vals args) {
 	}
 
 	printf("\n");
-	return (Val){0};
+	return NULL_VAL;
 }
 
-Val Input(Location call_loc, ErrorCtx *ec, Vals args) {
+Val Input(EvalCtx *ctx, Location call_loc, Vals args) {
 	if (args.items[0].kind != VAL_STR)
-		err(ec, call_loc, "input() accepts only string");
+		err(&ctx->err, call_loc, "input() accepts only string");
 
 	char res[1024];
-	StringBuilder *str = malloc(sizeof(*str));
-	*str = (StringBuilder){0};
+	Val str = eval_new_heap_val(ctx, VAL_STR);
 
-	printf("%s", args.items[0].as.str->items);
+	printf("%s", VSTR(args.items[0])->items);
 	scanf("%s", res);
-	sb_appendf(str, "%s", res);
+	sb_appendf(VSTR(str), "%s", res);
 
-	return (Val){
-		.kind = VAL_STR,
-		.as.str = str,
-	};
+	return str;
 }
 
-Val Exit(Location call_loc, ErrorCtx *ec, Vals args) {
+Val Exit(EvalCtx *ctx, Location call_loc, Vals args) {
 	if (args.count != 1)
-		err(ec, call_loc, "exit() accepts only 1 argument");
+		err(&ctx->err, call_loc, "exit() accepts only 1 argument");
 
 	if (args.items[0].kind != VAL_INT)
-		err(ec, call_loc, "exit() accepts only integer");
+		err(&ctx->err, call_loc, "exit() accepts only integer");
 
 	exit(args.items[0].as.vint);
-	return (Val){0};
+	return NULL_VAL;
 }
 
-Val System(Location call_loc, ErrorCtx *ec, Vals args) {
+Val System(EvalCtx *ctx, Location call_loc, Vals args) {
 	if (args.count == 0)
-		err(ec, call_loc, "arguments were not provided");
+		err(&ctx->err, call_loc, "arguments were not provided");
 
 	StringBuilder str = {0};
 	for (size_t i = 0; i < args.count; i++) {
 		if (args.items[i].kind != VAL_STR)
-			err(ec, call_loc, "system() accepts only strings");
-		sb_appendf(&str, "%s ", args.items[i].as.str->items);
+			err(&ctx->err, call_loc, "system() accepts only strings");
+		sb_appendf(&str, "%s ", VSTR(args.items[i])->items);
 	}
+
+	int res = system(str.items);
+	sb_free(&str);
 
 	return (Val){
 		.kind = VAL_INT,
-		.as.vint = system(str.items),
+		.as.vint = res,
 	};
 }
 
-Val Append(Location call_loc, ErrorCtx *ec, Vals args) {
+Val Append(EvalCtx *ctx, Location call_loc, Vals args) {
 	if (args.count < 2)
-		err(ec, call_loc, "append() accepts list or str as first argument");
+		err(&ctx->err, call_loc, "append() accepts more than 1 arguments");
 
 	if (args.items[0].kind == VAL_LIST) {
-		Vals *list = args.items[0].as.list;
+		Vals *list = VLIST(args.items[0]);
 		for (size_t i = 1; i < args.count; i++)
 			da_append(list, args.items[i]);
 	} else if (args.items[0].kind == VAL_STR) {
-		StringBuilder *str = args.items[0].as.str;
+		StringBuilder *str = VSTR(args.items[0]);
 		for (size_t i = 1; i < args.count; i++) {
 			if (args.items[i].kind != VAL_STR)
-				err(ec, call_loc, "append() accepts only strings for string appending");
-
-			sb_appendf(str, "%s", args.items[i].as.str->items);
+				err(&ctx->err, call_loc, "append() accepts only strings for string appending");
+			sb_appendf(str, "%s", VSTR(args.items[i])->items);
 		}
-	}
+	} else err(&ctx->err, call_loc, "append() accepts only list or string");
 
-	return (Val){0};
+	return NULL_VAL;
 }
 
-Val Remove(Location call_loc, ErrorCtx *ec, Vals args) {
+Val Remove(EvalCtx *ctx, Location call_loc, Vals args) {
 	if (args.count != 2)
 		goto err;
 
@@ -237,28 +225,28 @@ Val Remove(Location call_loc, ErrorCtx *ec, Vals args) {
 	if (ind.kind != VAL_INT)
 		goto err;
 
-	da_remove_ordered(list.as.list, ind.as.vint);
-	return (Val){0};
+	da_remove_ordered(VLIST(list), ind.as.vint);
+	return NULL_VAL;
 
 err:
-	err(ec, call_loc, "remove() accepts list and index");
-	return (Val){0};
+	err(&ctx->err, call_loc, "remove() accepts list and index");
+	return NULL_VAL;
 }
 
-Val Range(Location call_loc, ErrorCtx *ec, Vals args) {
+Val Range(EvalCtx *ctx, Location call_loc, Vals args) {
 	long long from = 0;
 	long long to   = 0;
 	long long step = 1;
 
 	if (args.count < 1 || args.count > 3) {
-		err(ec, call_loc, "range() accepts 1, 2 and 3 arguments");
-		return (Val){0};
+		err(&ctx->err, call_loc, "range() accepts 1, 2 and 3 arguments");
+		return NULL_VAL;
 	}
 
 	da_foreach (Val, val, &args) {
 		if (val->kind != VAL_INT) {
-			err(ec, call_loc, "range() accepts only integers");
-			return (Val){0};
+			err(&ctx->err, call_loc, "range() accepts only integers");
+			return NULL_VAL;
 		}
 	}
 
@@ -273,31 +261,26 @@ Val Range(Location call_loc, ErrorCtx *ec, Vals args) {
 		step = args.items[2].as.vint;
 	}
 
-	Vals *list = malloc(sizeof(Vals));
-	*list = (Vals){0};
-
+	Val list = eval_new_heap_val(ctx, VAL_LIST);
 	if (step > 0) {
 		for (long long i = from; i < to; i += step)
-			da_append(list, ((Val){ .kind = VAL_INT, .as.vint = i }));
+			da_append(VLIST(list), ((Val){ .kind = VAL_INT, .as.vint = i }));
 	} else {
 		for (long long i = from; i > to; i += step)
-			da_append(list, ((Val){ .kind = VAL_INT, .as.vint = i }));
+			da_append(VLIST(list), ((Val){ .kind = VAL_INT, .as.vint = i }));
 	}
 
-	return (Val){
-		.kind = VAL_LIST,
-		.as.list = list,
-	};
+	return list;
 }
 
-Val Insert(Location call_loc, ErrorCtx *ec, Vals args) {
+Val Insert(EvalCtx *ctx, Location call_loc, Vals args) {
 	if (args.count != 3)
 		goto err;
 
 	if (args.items[0].kind != VAL_LIST)
 		goto err;
 
-	Vals *list = args.items[0].as.list;
+	Vals *list = VLIST(args.items[0]);
 	Val ind = args.items[1];
 	if (ind.kind != VAL_INT)
 		goto err;
@@ -306,20 +289,20 @@ Val Insert(Location call_loc, ErrorCtx *ec, Vals args) {
 
 	if (val.kind != VAL_INT) goto err;
 	da_insert(list, ind.as.vint, val);
-	return (Val){0};
+	return NULL_VAL;
 
 err:
-	err(ec, call_loc, "insert() accepts: list, index and value");
+	err(&ctx->err, call_loc, "insert() accepts: list, index and value");
 }
 
-Val Has(Location call_loc, ErrorCtx *ec, Vals args) {
+Val Has(EvalCtx *ctx, Location call_loc, Vals args) {
 	if (args.count != 2)
 		goto err;
 
 	if (args.items[0].kind != VAL_DICT)
 		goto err;
 
-	ValDict *dict = args.items[0].as.dict;
+	ValDict *dict = VDICT(args.items[0]);
 	Val key = args.items[1];
 
 	return (Val){
@@ -328,16 +311,15 @@ Val Has(Location call_loc, ErrorCtx *ec, Vals args) {
 	};
 
 err:
-	err(ec, call_loc, "has() accepts: dictionary, item");
-	return (Val){0};
+	err(&ctx->err, call_loc, "has() accepts: dictionary, item");
+	return NULL_VAL;
 }
 
 
 void reg_platform(Parser *p, EvalCtx *ctx) {
-	StringBuilder *str = malloc(sizeof(*str));
-	*str = (StringBuilder){0};
-	char *platform;
+	Val str = eval_new_heap_val(ctx, VAL_STR);
 
+	char *platform;
 #if defined(_WIN32)
 	platform = "WINDOWS";
 #elif defined(__linux__)
@@ -348,11 +330,8 @@ void reg_platform(Parser *p, EvalCtx *ctx) {
 	platform = "NONE";
 #endif
 
-	sb_appendf(str, "%s", platform);
-	reg_var(ctx, "_OS_", (Val){
-		.kind = VAL_STR,
-		.as.str = str,
-	});
+	sb_appendf(VSTR(str), "%s", platform);
+	reg_var(ctx, "_OS_", str);
 }
 
 void reg_stdlib(Parser *p, EvalCtx *ctx) {
