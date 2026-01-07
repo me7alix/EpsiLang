@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 #include "lexer.h"
-#include "err.h"
+#include "error.h"
 #include "../3dparty/cplus.h"
 
 typedef enum {
@@ -12,6 +12,10 @@ typedef enum {
 	AST_OP_SUB,
 	AST_OP_MUL,
 	AST_OP_DIV,
+	AST_OP_ADD_EQ,
+	AST_OP_SUB_EQ,
+	AST_OP_MUL_EQ,
+	AST_OP_DIV_EQ,
 	AST_OP_NOT_EQ,
 	AST_OP_IS_EQ,
 	AST_OP_GREAT,
@@ -21,6 +25,7 @@ typedef enum {
 	AST_OP_AND,
 	AST_OP_OR,
 	AST_OP_ARR,
+	AST_OP_MOD,
 	AST_OP_PAIR,
 } AST_Op;
 
@@ -40,14 +45,9 @@ typedef struct {
 	} as;
 } AST_Literal;
 
-typedef enum {
-	FAC_EQ,
-	FAC_GREAT,
-} FuncArgsKind;
-
 typedef struct {
 	Lexer lexer;
-	ErrorCtx ec;
+	ErrorCtx err_ctx;
 } Parser;
 
 typedef struct AST AST;
@@ -59,12 +59,14 @@ struct AST {
 		AST_VAR_ANY,
 		AST_VAR_DEF,
 		AST_VAR_MUT,
+		AST_VAL_NONE,
 		AST_LIST,
 		AST_DICT,
 		AST_FUNC_DEF,
 		AST_FUNC_CALL,
 		AST_ST_WHILE,
 		AST_ST_FOR,
+		AST_ST_FOREACH,
 		AST_ST_IF,
 		AST_ST_ELSE,
 		AST_BIN_EXPR,
@@ -92,10 +94,16 @@ struct AST {
 			AST *body;
 		} st_while;
 		struct {
+			AST *var;
+			AST *cond;
+			AST *mut;
+			AST *body;
+		} st_for;
+		struct {
 			char *var_id;
 			AST *coll;
 			AST *body;
-		} st_for;
+		} st_foreach;
 		struct {
 			char *id;
 			AST *expr;

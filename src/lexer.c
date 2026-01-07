@@ -71,6 +71,7 @@ struct {
 	{ "return",   TOK_RET       },
 	{ "import",   TOK_IMPORT    },
 	{ "fn",       TOK_FUNC      },
+	{ "none",     TOK_NONE      },
 };
 
 Token lexer_next(Lexer *l) {

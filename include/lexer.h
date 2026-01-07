@@ -1,7 +1,7 @@
 #ifndef LEXER_H
 #define LEXER_H
 
-#include "err.h"
+#include "error.h"
 #include <stdbool.h>
 
 typedef enum {
@@ -14,7 +14,7 @@ typedef enum {
 	TOK_CSQBRA, TOK_CBRA, TOK_DOT, TOK_PLUS_EQ, TOK_MINUS_EQ, TOK_STAR_EQ,
 	TOK_SLASH_EQ, TOK_BREAK, TOK_CONTINUE, TOK_IMPORT, TOK_MACRO,  TOK_XOR,
 	TOK_ELSE_SYM, TOK_PS, TOK_ANY, TOK_FUNC, TOK_LEFT_SHIFT, TOK_RIGHT_SHIFT,
-	TOK_TILDA, TOK_ERR, TOK_ARROW, TOK_ARROW_EQ,
+	TOK_TILDA, TOK_ERR, TOK_ARROW, TOK_ARROW_EQ, TOK_NONE,
 } TokenKind;
 
 typedef struct {

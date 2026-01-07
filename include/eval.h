@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-#include "err.h"
+#include "error.h"
 #include "../include/parser.h"
 
 typedef struct {
@@ -82,14 +82,14 @@ struct EvalCtx {
 
 	GarbageCollector gc;
 	EvalStack stack;
-	ErrorCtx err;
+	ErrorCtx err_ctx;
 };
 
 void eval_collect_garbage(EvalCtx *ctx);
 Val eval_new_heap_val(EvalCtx *ctx, u8 kind);
 
 Val eval(EvalCtx *ctx, AST *n);
-void reg_var(EvalCtx *ctx, const char *id, Val val);
-void reg_func(EvalCtx *ctx, const char *id, RegFunc rf);
+void eval_reg_var(EvalCtx *ctx, const char *id, Val val);
+void eval_reg_func(EvalCtx *ctx, const char *id, RegFunc rf);
 
 #endif

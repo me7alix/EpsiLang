@@ -1,4 +1,4 @@
-fn not_supported_os() {
+if _OS_ == "NONE" {
 	print("OS is not supported");
 	exit(1);
 }
@@ -23,11 +23,9 @@ fn path(...) {
 
 		if _OS_ == "LINUX" || _OS_ == "APPLE" -> del = "/";
 		else if _OS_ == "WINDOWS"             -> del = "\\";
-		else                                  -> not_supported_os();
 
-		if i < len(_VA_ARGS_) - 1 {
+		if i < len(_VA_ARGS_) - 1 ->
 			append(res, del);
-		}
 	}
 
 	return res;
@@ -46,22 +44,21 @@ fn make_dir(dir_name) {
 		cmd("mkdir", "-p", dir_name);
 	} else if _OS_ == "WINDOWS" {
 		cmd("md", dir_name);
-	} else -> not_supported_os();
+	}
 }
 
 fn copy_file(src, dst) {
 	if _OS_ == "LINUX" || _OS_ == "APPLE" {
-		cmd(join(["cp", src, dst]));
+		cmd("cp", src, dst);
 	} else if _OS_ == "WINDOWS" {
 		cmd("copy", src, dst);
-	} else -> not_supported_os();
+	}
 }
 
 fn SO() {
 	if      _OS_ == "LINUX"   => ".so";
 	else if _OS_ == "WINDOWS" => ".dll";
 	else if _OS_ == "APPLE"   => ".dylib";
-	else                      -> not_supported_os();
 }
 
 build_folder := path("build", "epsilang");

@@ -1,7 +1,8 @@
-#ifndef ERR_H
-#define ERR_H
+#ifndef ERROR_H
+#define ERROR_H
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 typedef struct {
@@ -11,7 +12,7 @@ typedef struct {
 	char *line_char;
 } Location;
 
-typedef enum {
+typedef enum : uint8_t {
 	ERROR_COMPTIME,
 	ERROR_RUNTIME,
 } ErrorKind;

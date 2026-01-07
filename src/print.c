@@ -138,9 +138,17 @@ void ast_print(AST *n, int spaces) {
 		} break;
 
 		case AST_ST_FOR: {
-			printf("for(%s):\n", n->as.st_for.var_id);
-			ast_print(n->as.st_for.coll, gap);
+			printf("for:\n");
+			ast_print(n->as.st_for.var, gap);
+			ast_print(n->as.st_for.cond, gap);
+			ast_print(n->as.st_for.mut, gap);
 			ast_print(n->as.st_for.body, gap);
+		} break;
+
+		case AST_ST_FOREACH: {
+			printf("foreach(%s):\n", n->as.st_foreach.var_id);
+			ast_print(n->as.st_foreach.coll, gap);
+			ast_print(n->as.st_foreach.body, gap);
 		} break;
 
 		case AST_BREAK: {

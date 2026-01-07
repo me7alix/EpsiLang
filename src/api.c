@@ -36,11 +36,11 @@ EpslCtx *epsl_from_str(EpslErrorFn errf, char *code) {
 	EpslCtxR *ctx = malloc(sizeof(EpslCtxR));
 	ctx->parser = (Parser){
 		.lexer = lexer_init("script", code),
-		.ec.errf = (ErrorFn) errf,
+		.err_ctx.errf = (ErrorFn) errf,
 	};
 
 	ctx->eval_ctx = (EvalCtx){
-		.err.errf = (ErrorFn) errf,
+		.err_ctx.errf = (ErrorFn) errf,
 		.stack = {0},
 		.gc = {0},
 	};
@@ -56,11 +56,11 @@ EpslCtx *epsl_from_file(EpslErrorFn errf, char *filename) {
 	EpslCtxR *ctx = malloc(sizeof(EpslCtxR));
 	ctx->parser = (Parser){
 		.lexer = lexer_init(filename, code),
-		.ec.errf = (ErrorFn) errf,
+		.err_ctx.errf = (ErrorFn) errf,
 	};
 
 	ctx->eval_ctx = (EvalCtx){
-		.err.errf = (ErrorFn) errf,
+		.err_ctx.errf = (ErrorFn) errf,
 		.stack = {0},
 		.gc = {0},
 	};
@@ -71,24 +71,24 @@ EpslCtx *epsl_from_file(EpslErrorFn errf, char *filename) {
 
 void epsl_reg_func(EpslCtx *ctx, const char *id, EpslRegFunc rf) {
 	EpslCtxR *rctx = ctx;
-	reg_func(&rctx->eval_ctx, id, (RegFunc) rf);
+	eval_reg_func(&rctx->eval_ctx, id, (RegFunc) rf);
 }
 
 void epsl_reg_var(EpslCtx *ctx, const char *id, EpslVal val) {
 	EpslCtxR *rctx = ctx;
 	Val ev; memcpy(&ev, &val, sizeof(ev));
-	reg_var(&rctx->eval_ctx, id, ev);
+	eval_reg_var(&rctx->eval_ctx, id, ev);
 }
 
 EpslResult epsl_eval(EpslCtx *ctx) {
 	EpslCtxR *rctx = ctx;
 	AST *ast = parse(&rctx->parser);
-	if (rctx->parser.ec.got_err)
+	if (rctx->parser.err_ctx.got_err)
 		return (EpslResult){.got_err = true};
 
 	EpslVal erv;
 	Val rv = eval(&rctx->eval_ctx, ast);
-	if (rctx->eval_ctx.err.got_err)
+	if (rctx->eval_ctx.err_ctx.got_err)
 		return (EpslResult){.got_err = true};
 
 	memcpy(&erv, &rv, sizeof(rv));
@@ -114,4 +114,14 @@ EpslVal epsl_new_heap_val(EpslCtx *ctx, uint8_t kind) {
 	EpslVal epsl_val;
 	memcpy(&epsl_val, &val, sizeof(val));
 	return epsl_val;
+}
+
+char *epsl_val_get_str(EpslVal *v) {
+	return VSTR((*(Val*)v))->items;
+}
+
+void epsl_val_set_str(EpslCtx *ctx, EpslVal *v, char *str) {
+	StringBuilder *sb = VSTR((*(Val*)v));
+	sb->count = 0;
+	sb_appendf(sb, "%s", str);
 }

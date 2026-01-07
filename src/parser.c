@@ -1,11 +1,10 @@
 #include <assert.h>
 #include <stdbool.h>
-#include <sys/types.h>
 #include "../include/parser.h"
 
 void parser_error(Parser *p, Location loc, char *msg) {
-	p->ec.got_err = true;
-	p->ec.errf(loc, ERROR_COMPTIME, msg);
+	p->err_ctx.got_err = true;
+	p->err_ctx.errf(loc, ERROR_COMPTIME, msg);
 }
 
 AST *ast_alloc(AST ast) {
@@ -36,6 +35,10 @@ long long parse_int(char *data) {
 uint ast_op_precedence(AST_Op op, bool l) {
 	switch (op) {
 		case AST_OP_EQ:
+		case AST_OP_ADD_EQ:
+		case AST_OP_SUB_EQ:
+		case AST_OP_MUL_EQ:
+		case AST_OP_DIV_EQ:
 		case AST_OP_PAIR:
 			return l ? 11 : 10;
 		case AST_OP_AND:
@@ -51,6 +54,7 @@ uint ast_op_precedence(AST_Op op, bool l) {
 		case AST_OP_SUB:
 		case AST_OP_ADD:
 			return l ? 71 : 70;
+		case AST_OP_MOD:
 		case AST_OP_MUL:
 		case AST_OP_DIV:
 			return l ? 81 : 80;
@@ -131,7 +135,7 @@ AST *parse_list(Parser *p) {
 
 			default: {
 				AST *expr = parse_expr(p, PARSE_EXPR_ARGS);
-				if (p->ec.got_err) return NULL;
+				if (p->err_ctx.got_err) return NULL;
 				da_append(&list->as.list, expr);
 			} break;
 		}
@@ -170,7 +174,7 @@ AST *parse_dict(Parser *p) {
 
 			default: {
 				AST *expr = parse_expr(p, PARSE_EXPR_ARGS);
-				if (p->ec.got_err) return NULL;
+				if (p->err_ctx.got_err) return NULL;
 
 				if (expr->kind != AST_BIN_EXPR && expr->as.bin_expr.op != AST_OP_PAIR) {
 					parser_error(p, expr->loc, "key value pair expected");
@@ -209,7 +213,7 @@ AST *parse_func_call(Parser *p) {
 
 			default: {
 				AST *expr = parse_expr(p, PARSE_EXPR_ARGS);
-				if (p->ec.got_err) return NULL;
+				if (p->err_ctx.got_err) return NULL;
 				da_append(&func_call->as.func_call.args, expr);
 			} break;
 		}
@@ -228,9 +232,9 @@ AST *parse_if_stmt(Parser *p) {
 	});
 
 	if_st->as.st_if_chain.cond = parse_expr(p, PARSE_EXPR_BODY);
-	if (p->ec.got_err) return NULL;
+	if (p->err_ctx.got_err) return NULL;
 	if_st->as.st_if_chain.body = parse_body(p, false);
-	if (p->ec.got_err) return NULL;
+	if (p->err_ctx.got_err) return NULL;
 
 	if (peek2(p).kind == TOK_ELSE_SYM) {
 		next(p);
@@ -238,7 +242,7 @@ AST *parse_if_stmt(Parser *p) {
 		if (peek2(p).kind == TOK_IF_SYM) {
 			next(p);
 			if_st->as.st_if_chain.chain = parse_if_stmt(p);
-			if (p->ec.got_err) return NULL;
+			if (p->err_ctx.got_err) return NULL;
 			return if_st;
 		}
 
@@ -248,34 +252,68 @@ AST *parse_if_stmt(Parser *p) {
 		});
 
 		elst->as.st_else.body = parse_body(p, false);
-		if (p->ec.got_err) return NULL;
+		if (p->err_ctx.got_err) return NULL;
 		if_st->as.st_if_chain.chain = elst;
 	}
 
 	return if_st;
 }
 
+AST *parse_var_mut(Parser *p, ParseExprKind pek) {
+	AST *var_mut = ast_alloc((AST){
+		.kind = AST_VAR_MUT,
+		.loc = peek(p).loc,
+		.as.var_mut = parse_expr(p, pek),
+	});
+
+	return var_mut;
+}
+
+AST *parse_var_def_assign(Parser *p) {
+	AST *var_def = ast_alloc((AST){
+		.kind = AST_VAR_DEF,
+		.loc = peek(p).loc,
+		.as.var_def.id = next(p).data,
+	});
+
+	expect(p, TOK_ASSIGN);
+	next(p);
+
+	var_def->as.var_def.expr = parse_expr(p, PARSE_EXPR_STMT);
+	if (p->err_ctx.got_err) return NULL;
+	return var_def;
+}
+
 AST *parse_for_stmt(Parser *p) {
 	AST *for_st = ast_alloc((AST){
-		.kind = AST_ST_FOR,
 		.loc = next(p).loc,
 	});
 
 	expect(p, TOK_ID);
-	if (p->ec.got_err) return NULL;
-	for_st->as.st_for.var_id = next(p).data;
+	if (p->err_ctx.got_err) return NULL;
 
-	expect(p, TOK_ID);
-	if (p->ec.got_err) return NULL;
-	if (strcmp(peek(p).data, "in") != 0) {
-		parser_error(p, peek(p).loc, "\"in\" keyword expected");
-		return NULL;
+	if (peek2(p).kind != TOK_ID && strcmp(peek2(p).data, "in") != 0) {
+		for_st->kind = AST_ST_FOR;
+		if (peek2(p).kind == TOK_ASSIGN)
+			for_st->as.st_for.var = parse_var_def_assign(p);
+		else
+			for_st->as.st_for.var = parse_var_mut(p, PARSE_EXPR_STMT);
+		if (p->err_ctx.got_err) return NULL;
+		next(p);
+
+		for_st->as.st_for.cond = parse_expr(p, PARSE_EXPR_STMT);
+		if (p->err_ctx.got_err) return NULL;
+		next(p);
+
+		for_st->as.st_for.mut = parse_var_mut(p, PARSE_EXPR_BODY);
+		if (p->err_ctx.got_err) return NULL;
+	} else {
+		for_st->kind = AST_ST_FOREACH;
+		for_st->as.st_foreach.var_id = next(p).data; next(p);
+		for_st->as.st_foreach.coll = parse_expr(p, PARSE_EXPR_BODY);
+		if (p->err_ctx.got_err) return NULL;
 	}
 
-	next(p);
-
-	for_st->as.st_for.coll = parse_expr(p, PARSE_EXPR_BODY);
-	if (p->ec.got_err) return NULL;
 
 	for_st->as.st_for.body = parse_body(p, false);
 	return for_st;
@@ -288,15 +326,15 @@ AST *parse_while_stmt(Parser *p) {
 	});
 
 	wst->as.st_while.cond = parse_expr(p, PARSE_EXPR_BODY);
-	if (p->ec.got_err) return NULL;
+	if (p->err_ctx.got_err) return NULL;
 	wst->as.st_while.body = parse_body(p, false);
-	if (p->ec.got_err) return NULL;
+	if (p->err_ctx.got_err) return NULL;
 	return wst;
 }
 
 AST *parse_func_def(Parser *p) {
 	next(p); expect(p, TOK_ID);
-	if (p->ec.got_err) return NULL;
+	if (p->err_ctx.got_err) return NULL;
 
 	AST *func_def = ast_alloc((AST){
 		.kind = AST_FUNC_DEF,
@@ -305,20 +343,20 @@ AST *parse_func_def(Parser *p) {
 
 	func_def->as.func_def.id = next(p).data;
 	expect(p, TOK_OPAR);
-	if (p->ec.got_err) return NULL;
+	if (p->err_ctx.got_err) return NULL;
 	next(p);
 
 	bool found_any = false;
 	while (peek(p).kind != TOK_CPAR) {
 		switch (peek(p).kind) {
-			case TOK_COM:
+			case TOK_COM: {
 				if(peek2(p).kind == TOK_COM) {
 					parser_error(p, peek(p).loc, "too many coms");
 					return NULL;
 				}
-				break;
+			} break;
 
-			case TOK_ANY:
+			case TOK_ANY: {
 				if (found_any) {
 					parser_error(p, peek(p).loc, "only one variadic parameter is allowed");
 					return NULL;
@@ -329,15 +367,15 @@ AST *parse_func_def(Parser *p) {
 					.kind = AST_VAR_ANY,
 					.loc = peek(p).loc,
 				}));
-				break;
+			} break;
 
-			case TOK_ID:
+			case TOK_ID: {
 				da_append(&func_def->as.func_def.args, ast_alloc((AST){
 					.kind = AST_VAR,
 					.loc = peek(p).loc,
 					.as.var = peek(p).data,
 				}));
-				break;
+			} break;
 
 			default:
 				parser_error(p, peek(p).loc, "wrong function argument");
@@ -357,7 +395,7 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 	ASTs nodes = {0};
 
 	for (;;) {
-		if (p->ec.got_err) return NULL;
+		if (p->err_ctx.got_err) return NULL;
 		if (pek == PARSE_EXPR_STMT) {
 			if (peek(p).kind == TOK_SEMI) break;
 		} else if (pek == PARSE_EXPR_PARS) {
@@ -386,7 +424,7 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 						}));
 
 						da_append(&nodes, parse_expr(p, PARSE_EXPR_SQBRAS));
-						if (p->ec.got_err) return NULL;
+						if (p->err_ctx.got_err) return NULL;
 						break;
 					}
 				}
@@ -400,6 +438,13 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 					.loc = peek(p).loc,
 					.as.lit.kind = LITERAL_STR,
 					.as.lit.as.vstr = peek(p).data,
+				}));
+			} break;
+
+			case TOK_NONE: {
+				da_append(&nodes, ast_alloc((AST){
+					.kind = AST_VAL_NONE,
+					.loc = peek(p).loc,
 				}));
 			} break;
 
@@ -452,13 +497,15 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 				}));
 			} break;
 
+			case TOK_PLUS_EQ: case TOK_MINUS_EQ:
+			case TOK_STAR_EQ: case TOK_SLASH_EQ:
 			case TOK_LESS: case TOK_LESS_EQ:
 			case TOK_GREAT: case TOK_GREAT_EQ:
 			case TOK_EQ_EQ: case TOK_AND:
 			case TOK_PLUS: case TOK_MINUS:
 			case TOK_STAR: case TOK_SLASH:
 			case TOK_EQ: case TOK_OR:
-			case TOK_COL: {
+			case TOK_COL: case TOK_PS: {
 				TokenKind tk = peek(p).kind;
 				da_append(&nodes, ast_alloc((AST){
 					.kind = AST_BIN_EXPR,
@@ -476,7 +523,12 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 					tk == TOK_PLUS     ? AST_OP_ADD      :
 					tk == TOK_MINUS    ? AST_OP_SUB      :
 					tk == TOK_STAR     ? AST_OP_MUL      :
-					tk == TOK_SLASH    ? AST_OP_DIV      : 0,
+					tk == TOK_SLASH    ? AST_OP_DIV      :
+					tk == TOK_PS       ? AST_OP_MOD      :
+					tk == TOK_PLUS_EQ  ? AST_OP_ADD_EQ   :
+					tk == TOK_MINUS_EQ ? AST_OP_SUB_EQ   :
+					tk == TOK_STAR_EQ  ? AST_OP_MUL_EQ   :
+					tk == TOK_SLASH_EQ ? AST_OP_DIV_EQ   : 0,
 				}));
 			} break;
 
@@ -510,31 +562,6 @@ AST *parse_func_ret(Parser *p) {
 	return func;
 }
 
-AST *parse_var_def_assign(Parser *p) {
-	AST *var_def = ast_alloc((AST){
-		.kind = AST_VAR_DEF,
-		.loc = peek(p).loc,
-		.as.var_def.id = next(p).data,
-	});
-
-	expect(p, TOK_ASSIGN);
-	next(p);
-
-	var_def->as.var_def.expr = parse_expr(p, PARSE_EXPR_STMT);
-	if (p->ec.got_err) return NULL;
-	return var_def;
-}
-
-AST *parse_var_mut(Parser *p) {
-	AST *var_mut = ast_alloc((AST){
-		.kind = AST_VAR_MUT,
-		.loc = peek(p).loc,
-		.as.var_mut = parse_expr(p, PARSE_EXPR_STMT),
-	});
-
-	return var_mut;
-}
-
 AST *parse_body(Parser *p, bool isProg) {
 	bool is_arrow    = false;
 	bool is_arrow_eq = false;
@@ -562,13 +589,23 @@ AST *parse_body(Parser *p, bool isProg) {
 
 	while ((!isProg && peek(p).kind != TOK_CBRA) ||
 		(isProg && peek(p).kind != TOK_EOF)) {
-		if (p->ec.got_err) return NULL;
+		if (p->err_ctx.got_err) return NULL;
 		switch (peek(p).kind) {
+			case TOK_IMPORT: {
+				next(p);
+				char *file = peek(p).data;
+				char *code = peek(p).data;
+				Parser np = {
+					.lexer = lexer_init(file, code),
+					.err_ctx = {0},
+				};
+			} break;
+
 			case TOK_ID: {
 				if (peek2(p).kind == TOK_ASSIGN)
 					da_append(&body->as.body, parse_var_def_assign(p));
 				else
-					da_append(&body->as.body, parse_var_mut(p));
+					da_append(&body->as.body, parse_var_mut(p, PARSE_EXPR_STMT));
 			} break;
 
 			case TOK_FUNC: {
@@ -611,8 +648,8 @@ AST *parse_body(Parser *p, bool isProg) {
 					return NULL;
 				}
 
-				da_append(&body->as.body, parse_var_mut(p));
-				if(p->ec.got_err) return NULL;
+				da_append(&body->as.body, parse_var_mut(p, PARSE_EXPR_STMT));
+				if(p->err_ctx.got_err) return NULL;
 			}
 		}
 
