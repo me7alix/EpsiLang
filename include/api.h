@@ -24,11 +24,6 @@ typedef struct {
 	bool got_err;
 } EpslErrorCtx;
 
-typedef enum {
-	EPSL_FAC_EQ,
-	EPSL_FAC_GREAT,
-} EpslFuncArgsKind;
-
 typedef void EpslCtx;
 typedef struct EpslVal EpslVal;
 

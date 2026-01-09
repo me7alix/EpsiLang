@@ -521,14 +521,17 @@ Val eval(EvalCtx *ctx, AST *n) {
 
 			AST *func_def = func->as.func.node;
 			bool found_any = false;
-			Val va_args = eval_new_heap_val(ctx, VAL_LIST);
+			Val va_args = {0};
 
 			if (func->kind == EVAL_SYMB_FUNC) {
 				size_t stack_size = ctx->stack.count;
 				for (size_t i = 0; i < n->as.func_call.args.count; i++) {
 					AST *func_call_arg = da_get(&n->as.func_call.args, i);
 
-				found_any: if (found_any) {
+				found_any:
+					if (found_any) {
+						if (va_args.kind == VAL_NONE)
+							va_args = eval_new_heap_val(ctx, VAL_LIST);
 						da_append(VLIST(va_args), eval(ctx, func_call_arg));
 						if (ctx->err_ctx.got_err) return NULL_VAL;
 						continue;
@@ -654,8 +657,8 @@ GC_Object *eval_gc_alloc(EvalCtx *ctx, int val_kind) {
 }
 
 void gc_obj_mark(GC_Object *obj) {
-	if (!obj->marked) return;
-	obj->marked = false;
+	if (obj->marked) return;
+	obj->marked = true;
 
 	switch (obj->val_kind) {
 		case VAL_DICT: {
@@ -683,7 +686,7 @@ void gc_obj_mark(GC_Object *obj) {
 void eval_collect_garbage(EvalCtx *ctx) {
 	// mark phase
 	da_foreach (GC_Object*, obj, &ctx->gc.objs) {
-		(*obj)->marked = true;
+		(*obj)->marked = false;
 	}
 
 	da_foreach (EvalSymbol, es, &ctx->stack) {
@@ -699,7 +702,7 @@ void eval_collect_garbage(EvalCtx *ctx) {
 	// sweep phase
 	for (size_t i = 0; i < ctx->gc.objs.count; i++) {
 		GC_Object *obj = da_get(&ctx->gc.objs, i);
-		if (obj->marked) {
+		if (!obj->marked) {
 			switch (obj->val_kind) {
 				case VAL_DICT: {
 					ValDict *dict = obj->data;
