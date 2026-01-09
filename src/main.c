@@ -14,7 +14,7 @@ void print_error(EpslLocation loc, EpslErrorKind ek, char *msg) {
 	printf("\n%s:%zu:%zu: %s %s\n", loc.file, lines_num, chars_num, err_type, msg);
 
 	loc.line_char = loc.line_start;
-	char err_ptr[128];
+	char err_ptr[512];
 	size_t cnt = 0;
 
 	while (*loc.line_char != '\n' && *loc.line_char != '\0'){

@@ -28,9 +28,9 @@
 #define CP_FREE free
 #endif
 
-#ifndef CP_MEMCPY
+#ifndef CP_MEMMOVE
 #include <string.h>
-#define CP_MEMCPY memcpy
+#define CP_MEMMOVE memmove
 #endif
 
 #ifndef CP_STRLEN
@@ -126,7 +126,7 @@
         CP_ASSERT(_idx <= _old); \
         da_reserve((da), _old + 1); \
         if (_idx < _old) { \
-            CP_MEMCPY((da)->items + _idx + 1, \
+            CP_MEMMOVE((da)->items + _idx + 1, \
                        (da)->items + _idx, \
                        sizeof *(da)->items * (_old - _idx)); \
         } \
@@ -159,7 +159,7 @@
 #define da_remove_ordered(da, index) \
     do { \
         da_get(da, index) = da_last(da); \
-        CP_MEMCPY((da)->items+(index), (da)->items+(index)+1, \
+        CP_MEMMOVE((da)->items+(index), (da)->items+(index)+1, \
                 sizeof(*(da)->items)*((da)->count-index)); \
         (da)->count--; \
     } while (0)
@@ -182,7 +182,7 @@
     do { \
         CP_ASSERT(new_items); \
         da_reserve((da), (da)->count + (new_items_count)); \
-        CP_MEMCPY((da)->items + (da)->count, (new_items), (new_items_count)*sizeof(*(da)->items)); \
+        CP_MEMMOVE((da)->items + (da)->count, (new_items), (new_items_count)*sizeof(*(da)->items)); \
         (da)->count += (new_items_count); \
     } while (0)
 
@@ -418,7 +418,7 @@ static void *arena_realloc(Arena *a, void *oldptr, size_t oldsz, size_t newsz) {
 
 static void *arena_memdup(Arena *arena, void *p, size_t size) {
     void *duped_mem = arena_alloc(arena, size);
-    CP_MEMCPY(duped_mem, p, size);
+    CP_MEMMOVE(duped_mem, p, size);
     return duped_mem;
 }
 
