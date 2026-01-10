@@ -49,10 +49,10 @@ EvalSymbol *eval_stack_get(EvalCtx *es, char *id) {
 u64 ValDict_hashf(Val key) {
 	switch (key.kind) {
 		case VAL_NONE:  return 0;
-		case VAL_INT:   return numhash(key.as.vint);
-		case VAL_FLOAT: return numhash(key.as.vint);
-		case VAL_BOOL:  return numhash(key.as.vbool);
-		case VAL_STR:   return strhash(VSTR(key)->items);
+		case VAL_INT:   return hash_num(key.as.vint);
+		case VAL_FLOAT: return hash_num(key.as.vint);
+		case VAL_BOOL:  return hash_num(key.as.vbool);
+		case VAL_STR:   return hash_str(VSTR(key)->items);
 
 		case VAL_LIST: {
 			u64 hash = 0;
@@ -773,7 +773,7 @@ void eval_collect_garbage(EvalCtx *ctx) {
 		}
 	}
 
-	arena_reset(&ctx->gc.from);
+	arena_free(&ctx->gc.from);
 
 	Arena temp = ctx->gc.from;
 	ctx->gc.from = ctx->gc.to;

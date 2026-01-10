@@ -118,7 +118,6 @@ static void *arena_alloc(Arena *a, size_t size) {
         b->count = 0;
         a->first = a->last = b;
     }
-
     ArenaBlock *b = a->last;
     if (b->count + size > b->capacity) {
         size_t new_cap = MAX(b->capacity * 2, size);
@@ -131,7 +130,6 @@ static void *arena_alloc(Arena *a, size_t size) {
         a->last = newb;
         b = newb;
     }
-
     void *p = b->data + b->count;
     b->count += size;
     a->last_ptr = p;
@@ -203,6 +201,7 @@ static char *arena_strdup(Arena *arena, char *str) {
     } while (0)
 
 /* Dynamic array */
+
 #define DA(type) struct { type *items; size_t count, capacity; Arena *arena; }
 
 #define _da_realloc(da, ptr, old_sz, new_sz) \
@@ -337,7 +336,6 @@ static char *arena_strdup(Arena *arena, char *str) {
     void ht_type##_remove(ht_type *ht, key_type key); \
     void ht_type##_free(ht_type *ht); \
     void ht_type##_set_arena(ht_type *ht, Arena *ar);
-
 #define HT_IMPL(ht_type, key_type, value_type) \
 extern u64 ht_type##_hashf(key_type key); \
 extern int ht_type##_compare(key_type a, key_type b); \
@@ -454,7 +452,7 @@ void ht_type##_free(ht_type *ht) { \
 
 #define ht_set_arena(ht, ar) do { (ht)->arena = (ar); } while (0)
 
-static inline u64 strhash(char *str) {
+static inline u64 hash_str(char *str) {
     u64 h = 14695981039346656037ULL;
     u8 *p = (u8*)(str);
     while (*p) {
@@ -464,7 +462,7 @@ static inline u64 strhash(char *str) {
     return h;
 }
 
-#define numhash(num) \
+#define hash_num(num) \
     ((u64)((u64)6364136223846793005ULL * (u64)(num) + 1442695040888963407ULL))
 
 #define hash_combine(h1, h2) \
@@ -477,7 +475,7 @@ static inline u64 strhash(char *str) {
 HT_IMPL(ht_type, char*, value_type) \
 \
 u64 ht_type##_hashf(char* s) { \
-    return strhash(s); \
+    return hash_str(s); \
 } \
 \
 int ht_type##_compare(char* a, char* b) { \
@@ -492,7 +490,7 @@ int ht_type##_compare(char* a, char* b) { \
 HT_IMPL(ht_type, key_type, value_type) \
 \
 u64 ht_type##_hashf(key_type num) { \
-    return numhash(num); \
+    return hash_num(num); \
 } \
 \
 int ht_type##_compare(key_type a, key_type b) { \

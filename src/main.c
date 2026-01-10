@@ -39,6 +39,7 @@ void print_usage() {
 	printf(
 		"Usage: [options] file\n"
 		"Options:\n"
+		"  -c     Program passed in as string\n"
 		"  -ast   Print abstract syntax tree\n"
 		"  -tok   Print tokens\n");
 }
@@ -47,6 +48,7 @@ int main(int argc, char *argv[]) {
 	char *input_file = NULL;
 	bool print_toks = false;
 	bool print_ast  = false;
+	bool cmd        = false;
 
 	if (argc == 1) {
 		print_usage();
@@ -58,6 +60,8 @@ int main(int argc, char *argv[]) {
 			print_toks = true;
 		} else if (strcmp(argv[i], "-ast") == 0) {
 			print_ast = true;
+		} else if (strcmp(argv[i], "-c") == 0) {
+			cmd = true;
 		} else if (
 			strcmp(argv[i], "-h") == 0 ||
 			strcmp(argv[i], "--help") == 0) {
@@ -78,10 +82,15 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 
-	EpslCtx *ctx = epsl_from_file(print_error, input_file);
-	if (!ctx) {
-		fprintf(stderr, "No such file...\n");
-		return 1;
+	EpslCtx *ctx;
+	if (!cmd) {
+		ctx = epsl_from_file(print_error, input_file);
+		if (!ctx) {
+			fprintf(stderr, "No such file...\n");
+			return 1;
+		}
+	} else {
+		ctx = epsl_from_str(print_error, input_file);
 	}
 
 	if (print_toks) epsl_print_tokens(ctx);
