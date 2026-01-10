@@ -1,4 +1,4 @@
-<img width="256" height="256" alt="image" src="https://github.com/user-attachments/assets/acc21c5a-4181-4a75-8188-561a96d064cf" />
+<img width="200" height="200" alt="index" src="https://github.com/user-attachments/assets/9c7bdcfe-ad94-4713-9ea4-58caafa35b0f" />
 
 # EpsiLang
 Epsilang - is an interpreted embeddable programming language written in C.
