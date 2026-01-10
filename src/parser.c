@@ -130,7 +130,6 @@ AST *parse_list(Parser *p) {
 
 	next(p);
 	for (;;) {
-		printf("%d\n", peek(p).kind);
 		switch (peek(p).kind) {
 			case TOK_CSQBRA: goto exit;
 
@@ -146,7 +145,7 @@ AST *parse_list(Parser *p) {
 				AST *expr = parse_expr(p, PARSE_EXPR_ARGS);
 				if (p->err_ctx.got_err) return NULL;
 				da_append(&list->as.list, expr);
-				if (peek(p).kind != TOK_CSQBRA || peek(p).kind != TOK_COM) {
+				if (peek(p).kind != TOK_CSQBRA && peek(p).kind != TOK_COM) {
 					parser_error(p, peek(p).loc, "wrong expression");
 					return NULL;
 				}
@@ -195,7 +194,7 @@ AST *parse_dict(Parser *p) {
 				}
 
 				da_append(&dict->as.dict, expr);
-				if (peek(p).kind != TOK_CBRA || peek(p).kind != TOK_COM) {
+				if (peek(p).kind != TOK_CBRA && peek(p).kind != TOK_COM) {
 					parser_error(p, peek(p).loc, "wrong expression");
 					return NULL;
 				}
@@ -234,7 +233,7 @@ AST *parse_func_call(Parser *p) {
 				if (p->err_ctx.got_err) return NULL;
 				da_append(&func_call->as.func_call.args, expr);
 
-				if (peek(p).kind != TOK_CPAR || peek(p).kind != TOK_COM) {
+				if (peek(p).kind != TOK_CPAR && peek(p).kind != TOK_COM) {
 					parser_error(p, peek(p).loc, "wrong expression");
 					return NULL;
 				}

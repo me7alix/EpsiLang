@@ -225,9 +225,11 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 		sb_appendf(VSTR(str), "%s%s", VSTR(lv)->items, VSTR(rv)->items);
 		return str;
 	} else if (lk == VAL_INT && rk == VAL_INT && op != AST_OP_DIV) {
-		return (Val){VAL_INT, .as.vint = binop(ctx, n->loc, op, vget(lv), vget(rv))};
+		return (Val){.kind = VAL_INT, .as.vint = binop(ctx, n->loc, op, vget(lv), vget(rv))};
 	} else if (lk == VAL_DICT && op == AST_OP_ARR) {
-		return *ValDict_get(VDICT(lv), rv);
+		Val *val = ValDict_get(VDICT(lv), rv);
+		if (!val) return NULL_VAL;
+		return *val;
 	} else if (lk == VAL_LIST && rk == VAL_INT && op == AST_OP_ARR) {
 		if (rv.as.vint < 0 || rv.as.vint > VLIST(lv)->count) {
 			char err[512];
