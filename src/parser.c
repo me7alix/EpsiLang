@@ -65,14 +65,17 @@ uint ast_op_precedence(AST_Op op, bool l) {
 }
 
 AST *parse_expand(Parser *p, ASTs *nodes) {
+	if (p->err_ctx.got_err) return NULL;
+	size_t cnt_before = nodes->count;
+
 	for (size_t i = 0; i < nodes->count; i++) {
 		if (nodes->count == 1)
 			return da_get(nodes, 0);
 
 		AST *node = da_get(nodes, i);
-
 		bool nlhs = node->as.bin_expr.lhs;
 		bool nrhs = node->as.bin_expr.rhs;
+
 		if (!(node->kind == AST_BIN_EXPR && (!nlhs || !nrhs))) {
 			uint lpr = 0, rpr = 0;
 
@@ -93,6 +96,11 @@ AST *parse_expand(Parser *p, ASTs *nodes) {
 			da_remove_ordered(nodes, i);
 			i--;
 		}
+	}
+
+	if (cnt_before == nodes->count) {
+		parser_error(p, da_get(nodes, 0)->loc, "wrong expression");
+		return NULL;
 	}
 
 	return parse_expand(p, nodes);
@@ -122,6 +130,7 @@ AST *parse_list(Parser *p) {
 
 	next(p);
 	for (;;) {
+		printf("%d\n", peek(p).kind);
 		switch (peek(p).kind) {
 			case TOK_CSQBRA: goto exit;
 
@@ -137,6 +146,10 @@ AST *parse_list(Parser *p) {
 				AST *expr = parse_expr(p, PARSE_EXPR_ARGS);
 				if (p->err_ctx.got_err) return NULL;
 				da_append(&list->as.list, expr);
+				if (peek(p).kind != TOK_CSQBRA || peek(p).kind != TOK_COM) {
+					parser_error(p, peek(p).loc, "wrong expression");
+					return NULL;
+				}
 			} break;
 		}
 	}
@@ -180,7 +193,12 @@ AST *parse_dict(Parser *p) {
 					parser_error(p, expr->loc, "key value pair expected");
 					return NULL;
 				}
+
 				da_append(&dict->as.dict, expr);
+				if (peek(p).kind != TOK_CBRA || peek(p).kind != TOK_COM) {
+					parser_error(p, peek(p).loc, "wrong expression");
+					return NULL;
+				}
 			} break;
 		}
 	}
@@ -215,6 +233,11 @@ AST *parse_func_call(Parser *p) {
 				AST *expr = parse_expr(p, PARSE_EXPR_ARGS);
 				if (p->err_ctx.got_err) return NULL;
 				da_append(&func_call->as.func_call.args, expr);
+
+				if (peek(p).kind != TOK_CPAR || peek(p).kind != TOK_COM) {
+					parser_error(p, peek(p).loc, "wrong expression");
+					return NULL;
+				}
 			} break;
 		}
 	}
