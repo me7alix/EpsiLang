@@ -40,26 +40,26 @@ uint ast_op_precedence(AST_Op op, bool l) {
 		case AST_OP_MUL_EQ:
 		case AST_OP_DIV_EQ:
 		case AST_OP_PAIR:
-			return l ? 11 : 10;
+			return l ? 10 : 11;
 		case AST_OP_AND:
 		case AST_OP_OR:
-			return l ? 16 : 15;
+			return l ? 15 : 16;
 		case AST_OP_NOT_EQ:
 		case AST_OP_IS_EQ:
 		case AST_OP_GREAT:
 		case AST_OP_GREAT_EQ:
 		case AST_OP_LESS:
 		case AST_OP_LESS_EQ:
-			return l ? 21 : 20;
+			return l ? 20 : 21;
 		case AST_OP_SUB:
 		case AST_OP_ADD:
-			return l ? 71 : 70;
+			return l ? 70 : 71;
 		case AST_OP_MOD:
 		case AST_OP_MUL:
 		case AST_OP_DIV:
-			return l ? 81 : 80;
+			return l ? 80 : 81;
 		case AST_OP_ARR:
-			return l ? 101 : 100;
+			return l ? 100 : 101;
 		default: return 0;
 	}
 }
