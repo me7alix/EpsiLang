@@ -1,11 +1,11 @@
-if _OS_ == "NONE" {
+if _OS_ != "WINDOWS" && _OS_ != "LINUX" && _OS_ != "APPLE" {
 	print("OS is not supported");
 	exit(1);
 }
 
 fn join(arr) {
 	res := "";
-	for i in range(len(arr)) {
+	for i := 0; i < len(arr); i+=1 {
 		append(res, arr[i]);
 		if i < len(arr) - 1 ->
 			append(res, " ");
@@ -18,7 +18,7 @@ fn path(...) {
 	res := "";
 	del := "";
 
-	for i in range(len(_VA_ARGS_)) {
+	for i := 0; i < len(_VA_ARGS_); i+=1 {
 		append(res, _VA_ARGS_[i]);
 
 		if _OS_ == "LINUX" || _OS_ == "APPLE" -> del = "/";

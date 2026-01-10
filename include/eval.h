@@ -14,11 +14,12 @@ typedef struct {
 
 #define GC_INIT_THRESHOLD 128
 #define GC_GROWTH_FACTOR 2
-#define GC_MIN_GROWTH 32
+#define GC_MIN_GROWTH 48
 
 typedef struct {
 	DA(GC_Object*) objs;
 	size_t threshold;
+	Arena from, to;
 } GarbageCollector;
 
 typedef struct Val Val;

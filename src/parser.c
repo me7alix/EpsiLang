@@ -505,12 +505,14 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 			case TOK_PLUS: case TOK_MINUS:
 			case TOK_STAR: case TOK_SLASH:
 			case TOK_EQ: case TOK_OR:
-			case TOK_COL: case TOK_PS: {
+			case TOK_COL: case TOK_PS:
+			case TOK_NOT_EQ: {
 				TokenKind tk = peek(p).kind;
 				da_append(&nodes, ast_alloc((AST){
 					.kind = AST_BIN_EXPR,
 					.loc = peek(p).loc,
 					.as.bin_expr.op =
+					tk == TOK_NOT_EQ   ? AST_OP_NOT_EQ   :
 					tk == TOK_LESS     ? AST_OP_LESS     :
 					tk == TOK_LESS_EQ  ? AST_OP_LESS_EQ  :
 					tk == TOK_GREAT    ? AST_OP_GREAT    :

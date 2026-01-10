@@ -15,3 +15,7 @@ print(nums);
 for n in nums {
 	print(n);
 }
+
+print("has 3:", has(nums, 3));
+print("has 0:", has(nums, 0));
+print("has 101:", has(nums, 101));

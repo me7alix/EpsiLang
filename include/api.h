@@ -31,12 +31,14 @@ typedef struct {
 	EpslVal *items;
 	size_t count;
 	size_t capacity;
+	void *arena;
 } EpslVals;
 
 typedef struct {
 	char *items;
 	size_t count;
 	size_t capacity;
+	void *arena;
 } EpslString;
 
 struct EpslVal {

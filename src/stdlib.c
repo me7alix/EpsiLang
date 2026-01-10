@@ -13,14 +13,17 @@ do { \
 	return NULL_VAL; \
 } while(0)
 
-void val_sprint(Val v, char *buf) {
+void val_sprint_f(Val v, char *buf, int depth) {
 	switch (v.kind) {
 		case VAL_INT:   sprintf(buf, "%lli", v.as.vint);      break;
 		case VAL_FLOAT: sprintf(buf, "%lf", v.as.vfloat);     break;
 		case VAL_BOOL:  sprintf(buf, "%s", bstr(v.as.vbool)); break;
 
 		case VAL_STR:
-			sprintf(buf, "%s", VSTR(v)->items);
+			if (depth == 0)
+				sprintf(buf, "%s", VSTR(v)->items);
+			else
+				sprintf(buf, "\"%s\"", VSTR(v)->items);
 			break;
 
 		case VAL_LIST: {
@@ -28,7 +31,7 @@ void val_sprint(Val v, char *buf) {
 			sb_appendf(&sb, "[");
 
 			da_foreach (Val, it, VLIST(v)) {
-				char buf[1024]; val_sprint(*it, buf);
+				char buf[1024]; val_sprint_f(*it, buf, depth + 1);
 				sb_appendf(&sb, "%s", buf);
 				if (it - VLIST(v)->items != VLIST(v)->count - 1)
 					sb_appendf(&sb, ", ", buf);
@@ -47,9 +50,9 @@ void val_sprint(Val v, char *buf) {
 			sb_appendf(&sb, "{");
 			ht_foreach_node (ValDict, dict, kv) {
 				char buf[1024];
-				val_sprint(kv->key, buf);
+				val_sprint_f(kv->key, buf, depth + 1);
 				sb_appendf(&sb, "%s: ", buf);
-				val_sprint(kv->val, buf);
+				val_sprint_f(kv->val, buf, depth + 1);
 				sb_appendf(&sb, "%s", buf);
 				if (count++ < dict->count - 1)
 					sb_appendf(&sb, ", ");
@@ -64,6 +67,10 @@ void val_sprint(Val v, char *buf) {
 			sprintf(buf, "err");
 			break;
 	}
+}
+
+void val_sprint(Val v, char *buf) {
+	val_sprint_f(v, buf, 0);
 }
 
 Val Int(EvalCtx *ctx, Location call_loc, Vals args) {
@@ -299,19 +306,30 @@ Val Has(EvalCtx *ctx, Location call_loc, Vals args) {
 	if (args.count != 2)
 		goto err;
 
-	if (args.items[0].kind != VAL_DICT)
-		goto err;
+	bool res = false;
 
-	ValDict *dict = VDICT(args.items[0]);
-	Val key = args.items[1];
+	if (args.items[0].kind == VAL_DICT) {
+		ValDict *dict = VDICT(args.items[0]);
+		Val key = args.items[1];
+		res = ValDict_get(dict, key) != NULL;
+	} else if (args.items[0].kind == VAL_LIST) {
+		Vals *list = VLIST(args.items[0]);
+		Val key = args.items[1];
+		da_foreach (Val, v, list) {
+			if (ValDict_compare(*v, key) == 0) {
+				res = true;
+				break;
+			}
+		}
+	} else goto err;
 
 	return (Val){
 		.kind = VAL_BOOL,
-		.as.vbool = ValDict_get(dict, key) != NULL,
+		.as.vbool = res,
 	};
 
 err:
-	err(ctx, call_loc, "has() accepts: dictionary, item");
+	err(ctx, call_loc, "has() accepts: dictionary or list, item");
 	return NULL_VAL;
 }
 

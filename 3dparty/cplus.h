@@ -18,9 +18,9 @@
 #define CP_REALLOC realloc
 #endif
 
-#ifndef CP_CALLOC
+#ifndef CP_MALLOC
 #include <stdlib.h>
-#define CP_CALLOC calloc
+#define CP_MALLOC malloc
 #endif
 
 #ifndef CP_FREE
@@ -55,26 +55,25 @@
 
 #ifndef CP_INT_DEFINED
     typedef unsigned int uint;
-    #ifdef CP_USE_INT /* optional for any system that might not have stdint.h */
-        typedef unsigned char      u8;
-        typedef signed char        i8;
-        typedef unsigned short     u16;
-        typedef signed short       i16;
-        typedef unsigned long int  u32;
-        typedef signed long int    i32;
+    #ifdef CP_USE_INT
+        typedef unsigned char u8;
+        typedef signed char i8;
+        typedef unsigned short u16;
+        typedef signed short i16;
+        typedef unsigned long int u32;
+        typedef signed long int i32;
         typedef unsigned long long u64;
-        typedef signed long long   i64;
-    #else /* use stdint standard types instead of c "standard" types */
+        typedef signed long long i64;
+    #else
         #include <stdint.h>
-
-        typedef uint8_t  u8;
-        typedef int8_t   i8;
+        typedef uint8_t u8;
+        typedef int8_t i8;
         typedef uint16_t u16;
-        typedef int16_t  i16;
+        typedef int16_t i16;
         typedef uint32_t u32;
-        typedef int32_t  i32;
+        typedef int32_t i32;
         typedef uint64_t u64;
-        typedef int64_t  i64;
+        typedef int64_t i64;
     #endif
     #define CP_INT_DEFINED
 #endif
@@ -83,9 +82,136 @@
 #define ARR_LEN(arr) (sizeof(arr)/sizeof(arr[0]))
 #endif
 
-/* Dynamic array */
+#ifndef MAX
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#endif
 
-#define DA(type) struct { type *items; size_t count, capacity; }
+/* Arena allocator (defined early since DA/HT depend on it) */
+
+#define CP_ALIGN_UP(x, a) (((x) + ((a) - 1)) & ~((a) - 1))
+
+typedef struct Arena Arena;
+typedef struct ArenaBlock ArenaBlock;
+
+struct ArenaBlock {
+    ArenaBlock *next;
+    size_t capacity;
+    size_t count;
+    u8 data[];
+};
+
+struct Arena {
+    ArenaBlock *first;
+    ArenaBlock *last;
+    void *last_ptr;
+    size_t last_sz;
+};
+
+static void *arena_alloc(Arena *a, size_t size) {
+    size = CP_ALIGN_UP(size, sizeof(void*));
+    if (!a->first) {
+        size_t cap = MAX(CP_ARENA_INIT_CAP, size);
+        ArenaBlock *b = (ArenaBlock *)CP_MALLOC(sizeof(ArenaBlock) + cap);
+        CP_ASSERT(b);
+        b->next = NULL;
+        b->capacity = cap;
+        b->count = 0;
+        a->first = a->last = b;
+    }
+
+    ArenaBlock *b = a->last;
+    if (b->count + size > b->capacity) {
+        size_t new_cap = MAX(b->capacity * 2, size);
+        ArenaBlock *newb = (ArenaBlock *)CP_MALLOC(sizeof(ArenaBlock) + new_cap);
+        CP_ASSERT(newb);
+        newb->next = NULL;
+        newb->capacity = new_cap;
+        newb->count = 0;
+        a->last->next = newb;
+        a->last = newb;
+        b = newb;
+    }
+
+    void *p = b->data + b->count;
+    b->count += size;
+    a->last_ptr = p;
+    a->last_sz = size;
+    return p;
+}
+
+static void *arena_realloc(Arena *a, void *oldptr, size_t oldsz, size_t newsz) {
+    if (newsz <= oldsz) return oldptr;
+    if (oldptr == a->last_ptr) {
+        ArenaBlock *b = a->last;
+        size_t extra = newsz - oldsz;
+        if (b->count + extra <= b->capacity) {
+            b->count += extra;
+            a->last_sz = newsz;
+            return oldptr;
+        } else {
+            size_t new_cap = MAX(b->capacity * 2, newsz);
+            ArenaBlock *newb = (ArenaBlock *)CP_MALLOC(sizeof(ArenaBlock) + new_cap);
+            CP_ASSERT(newb);
+            newb->next = NULL;
+            newb->capacity = new_cap;
+            newb->count = newsz;
+            CP_MEMMOVE(newb->data, oldptr, oldsz);
+            a->last->next = newb;
+            a->last = newb;
+            b->count -= oldsz;
+            a->last_ptr = newb->data;
+            a->last_sz = newsz;
+            return a->last_ptr;
+        }
+    }
+    void *newptr = arena_alloc(a, newsz);
+    CP_MEMMOVE(newptr, oldptr, oldsz);
+    return newptr;
+}
+
+static void *arena_memdup(Arena *arena, void *p, size_t size) {
+    void *duped_mem = arena_alloc(arena, size);
+    CP_MEMMOVE(duped_mem, p, size);
+    return duped_mem;
+}
+
+static char *arena_strdup(Arena *arena, char *str) {
+    return (char *) arena_memdup(arena, str, CP_STRLEN(str) + 1);
+}
+
+#define arena_free(ar) \
+    do { \
+        ArenaBlock *b = (ar)->first; \
+        while (b) { \
+            ArenaBlock *next = b->next; \
+            CP_FREE(b); \
+            b = next; \
+        } \
+        (ar)->first = (ar)->last = NULL; \
+        (ar)->last_ptr = NULL; \
+        (ar)->last_sz = 0; \
+    } while (0)
+
+#define arena_reset(ar) \
+    do { \
+        for (ArenaBlock *b = (ar)->first; b; b = b->next) { \
+            b->count = 0; \
+        } \
+        (ar)->last = (ar)->first; \
+        (ar)->last_ptr = NULL; \
+        (ar)->last_sz = 0; \
+    } while (0)
+
+/* Dynamic array */
+#define DA(type) struct { type *items; size_t count, capacity; Arena *arena; }
+
+#define _da_realloc(da, ptr, old_sz, new_sz) \
+    ((da)->arena ? \
+        ((ptr) ? arena_realloc((da)->arena, ptr, old_sz, new_sz) : arena_alloc((da)->arena, new_sz)) : \
+        CP_REALLOC(ptr, new_sz))
+
+#define _da_free(da, ptr) \
+    do { if (!(da)->arena && ptr) CP_FREE(ptr); } while(0)
 
 #define da_foreach(Type, it, da) \
     for (Type *it = (da)->items; it < (da)->items + (da)->count; ++it)
@@ -94,10 +220,10 @@
     do { \
         if ((expected_capacity) > (da)->capacity) { \
             size_t new_capacity = (da)->capacity ? (da)->capacity : CP_DA_INIT_CAP; \
-            while ((expected_capacity) > new_capacity) { \
-                new_capacity *= 2; \
-            } \
-            void *new_items = CP_REALLOC((da)->items, new_capacity * sizeof(*(da)->items)); \
+            while ((expected_capacity) > new_capacity) new_capacity *= 2; \
+            size_t old_sz = (da)->capacity * sizeof(*(da)->items); \
+            size_t new_sz = new_capacity * sizeof(*(da)->items); \
+            void *new_items = _da_realloc(da, (da)->items, old_sz, new_sz); \
             CP_ASSERT(new_items != NULL || (expected_capacity) == 0); \
             if (new_items || (expected_capacity) == 0) { \
                 (da)->items = CP_DECLTYPE_CAST((da)->items)new_items; \
@@ -108,9 +234,11 @@
 
 #define da_shrink(da) \
     do { \
-        if ((da)->capacity == 0) break; \
-        if ((da)->count <= (da)->capacity / 4) (da)->capacity = (da)->count * 2; \
-        (da)->items = CP_REALLOC((da)->items, sizeof(*(da)->items) * (da)->capacity); \
+        if ((da)->capacity == 0 || (da)->arena) break; \
+        if ((da)->count <= (da)->capacity / 4) { \
+            (da)->capacity = (da)->count * 2; \
+            (da)->items = CP_REALLOC((da)->items, sizeof(*(da)->items) * (da)->capacity); \
+        } \
     } while (0)
 
 #define da_append(da, item) \
@@ -166,8 +294,8 @@
 
 #define da_free(da) \
     do { \
-        if ((da)->items) \
-            CP_FREE((da)->items); \
+        _da_free(da, (da)->items); \
+        (da)->items = NULL; \
         (da)->count = 0; \
         (da)->capacity = 0; \
     } while (0)
@@ -186,6 +314,8 @@
         (da)->count += (new_items_count); \
     } while (0)
 
+#define da_set_arena(da, ar) do { (da)->arena = (ar); } while(0)
+
 /* Hashtable templates */
 
 #define HT_DECL(ht_type, key_type, value_type) \
@@ -198,22 +328,33 @@
         ht_type##_node **arr; \
         size_t count; \
         size_t capacity; \
+        Arena *arena; \
     } ht_type; \
     u64 ht_type##_hashf(key_type key); \
     int ht_type##_compare(key_type a, key_type b); \
     void ht_type##_add(ht_type *ht, key_type key, value_type val); \
     value_type *ht_type##_get(ht_type *ht, key_type key); \
     void ht_type##_remove(ht_type *ht, key_type key); \
-    void ht_type##_free(ht_type *ht);
+    void ht_type##_free(ht_type *ht); \
+    void ht_type##_set_arena(ht_type *ht, Arena *ar);
 
 #define HT_IMPL(ht_type, key_type, value_type) \
 extern u64 ht_type##_hashf(key_type key); \
 extern int ht_type##_compare(key_type a, key_type b); \
 \
+void ht_type##_set_arena(ht_type *ht, Arena *ar) { \
+    ht->arena = ar; \
+} \
+\
 void ht_type##_add(ht_type *ht, key_type key, value_type val) { \
     if (ht->capacity == 0) { \
         ht->capacity = CP_HT_INIT_CAP; \
-        ht->arr = (ht_type##_node**) CP_CALLOC(ht->capacity, sizeof(ht_type##_node*)); \
+        if (ht->arena) { \
+            ht->arr = (ht_type##_node**) arena_alloc(ht->arena, ht->capacity * sizeof(ht_type##_node*)); \
+        } else { \
+            ht->arr = (ht_type##_node**) CP_MALLOC(ht->capacity * sizeof(ht_type##_node*)); \
+        } \
+        memset(ht->arr, 0, ht->capacity * sizeof(ht_type##_node*)); \
     } \
     size_t idx = (size_t)(ht_type##_hashf(key) % ht->capacity); \
     ht_type##_node *cur = ht->arr[idx]; \
@@ -224,7 +365,10 @@ void ht_type##_add(ht_type *ht, key_type key, value_type val) { \
         } \
         cur = cur->next; \
     } \
-    ht_type##_node *n = (ht_type##_node*) CP_CALLOC(1, sizeof(ht_type##_node)); \
+    ht_type##_node *n = ht->arena \
+        ? (ht_type##_node*) arena_alloc(ht->arena, sizeof(ht_type##_node)) \
+        : (ht_type##_node*) CP_MALLOC(sizeof(ht_type##_node)); \
+    memset(n, 0, sizeof(ht_type##_node)); \
     n->key = key; \
     n->val = val; \
     n->next = ht->arr[idx]; \
@@ -233,7 +377,13 @@ void ht_type##_add(ht_type *ht, key_type key, value_type val) { \
     if (ht->count > ht->capacity * 2) { \
         size_t old_cap = ht->capacity; \
         size_t new_cap = old_cap * 3; \
-        ht_type##_node **new_arr = (ht_type##_node**) CP_CALLOC(new_cap, sizeof(ht_type##_node*)); \
+        ht_type##_node **new_arr; \
+        if (ht->arena) { \
+            new_arr = (ht_type##_node**) arena_alloc(ht->arena, new_cap * sizeof(ht_type##_node*)); \
+        } else { \
+            new_arr = (ht_type##_node**) CP_MALLOC(new_cap * sizeof(ht_type##_node*)); \
+        } \
+        memset(new_arr, 0, new_cap * sizeof(ht_type##_node*)); \
         for (size_t i = 0; i < old_cap; ++i) { \
             ht_type##_node *it = ht->arr[i]; \
             while (it) { \
@@ -244,7 +394,7 @@ void ht_type##_add(ht_type *ht, key_type key, value_type val) { \
                 it = next; \
             } \
         } \
-        CP_FREE(ht->arr); \
+        if (!ht->arena) CP_FREE(ht->arr); \
         ht->arr = new_arr; \
         ht->capacity = new_cap; \
     } \
@@ -269,7 +419,7 @@ void ht_type##_remove(ht_type *ht, key_type key) { \
     while (cur) { \
         if (ht_type##_compare(cur->key, key) == 0) { \
             if (prev) prev->next = cur->next; else ht->arr[idx] = cur->next; \
-            CP_FREE(cur); \
+            if (!ht->arena) CP_FREE(cur); \
             ht->count--; \
             return; \
         } \
@@ -279,7 +429,7 @@ void ht_type##_remove(ht_type *ht, key_type key) { \
 } \
 \
 void ht_type##_free(ht_type *ht) { \
-    if (ht->capacity == 0) return; \
+    if (ht->capacity == 0 || ht->arena) return; \
     for (size_t i = 0; i < ht->capacity; ++i) { \
         ht_type##_node *cur = ht->arr[i]; \
         while (cur) { \
@@ -301,6 +451,8 @@ void ht_type##_free(ht_type *ht) { \
 #define ht_foreach_node(ht_type, ht, nodevar) \
     for (size_t _ht_idx = 0; (ht)->capacity && _ht_idx < (ht)->capacity; ++_ht_idx) \
         for (ht_type##_node *nodevar = (ht)->arr[_ht_idx]; nodevar; nodevar = nodevar->next)
+
+#define ht_set_arena(ht, ar) do { (ht)->arena = (ar); } while (0)
 
 static inline u64 strhash(char *str) {
     u64 h = 14695981039346656037ULL;
@@ -372,61 +524,8 @@ static inline int sb_appendf(StringBuilder *sb, const char *fmt, ...) {
 }
 
 #define sb_append(sb, c) da_append(sb, c)
-#define sb_reset(sb)     da_reset(sb)
-#define sb_free(sb)      da_free(sb)
-
-/* Arena allocator */
-
-#define CP_ALIGN_UP(x, a) (((x) + ((a) - 1)) & ~((a) - 1))
-
-typedef struct {
-	DA(u8) buf;
-	void *last_ptr;
-	size_t last_sz;
-} Arena;
-
-static void *arena_alloc(Arena *a, size_t size) {
-    size = CP_ALIGN_UP(size, sizeof(void*));
-
-    if (a->buf.count == 0)
-        da_reserve(&a->buf, CP_ARENA_INIT_CAP);
-
-    da_reserve(&a->buf, a->buf.count + size);
-    void *p = a->buf.items + a->buf.count;
-    a->buf.count += size;
-
-    a->last_ptr = p;
-    a->last_sz  = size;
-    return p;
-}
-
-static void *arena_realloc(Arena *a, void *oldptr, size_t oldsz, size_t newsz) {
-    if (newsz <= oldsz) return oldptr;
-
-    if (oldptr == a->last_ptr) {
-        size_t extra = newsz - oldsz;
-        da_reserve(&a->buf, a->buf.count + extra);
-        a->buf.count += extra;
-        a->last_sz = newsz;
-        return oldptr;
-    }
-
-    void *newptr = arena_alloc(a, newsz);
-    memcpy(newptr, oldptr, oldsz);
-    return newptr;
-}
-
-static void *arena_memdup(Arena *arena, void *p, size_t size) {
-    void *duped_mem = arena_alloc(arena, size);
-    CP_MEMMOVE(duped_mem, p, size);
-    return duped_mem;
-}
-
-static char *arena_strdup(Arena *arena, char *str) {
-    return (char *) arena_memdup(arena, str, CP_STRLEN(str) + 1);
-}
-
-#define arena_free(ar)  da_free((ar)->buf)
-#define arena_reset(ar) da_reset((ar)->buf)
+#define sb_reset(sb) da_reset(sb)
+#define sb_free(sb) da_free(sb)
+#define sb_set_arena(sb, ar) da_set_arena(sb, ar)
 
 #endif // CP_H_
