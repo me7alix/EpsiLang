@@ -1,5 +1,5 @@
 if _OS_ != "WINDOWS" && _OS_ != "LINUX" && _OS_ != "APPLE" {
-	print("OS is not supported");
+	println("OS is not supported");
 	exit(1);
 }
 
@@ -34,7 +34,7 @@ fn path(...) {
 cmd_debug_mode := false;
 fn cmd(...) {
 	command := join(_VA_ARGS_);
-	print("[CMD] " + command);
+	println("[CMD] ", command);
 	if cmd_debug_mode == false ->
 		system(command);
 }

@@ -41,8 +41,8 @@ typedef struct {
 	void *arena;
 } EpslString;
 
-struct EpslVal {
-	enum {
+struct EpslVal  {
+	enum : uint8_t {
 		EPSL_VAL_NONE,
 		EPSL_VAL_INT,
 		EPSL_VAL_FLOAT,
@@ -68,6 +68,8 @@ typedef struct {
 typedef struct EpslEvalCtx EpslEvalCtx;
 typedef EpslVal (*EpslRegFunc)(EpslEvalCtx *ctx, EpslLocation call_loc, EpslVals args);
 
+#define EPSL_VNONE ((EpslVal){0})
+
 EpslVal epsl_new_heap_val(EpslCtx *ctx, uint8_t kind);
 EpslCtx *epsl_from_str(EpslErrorFn errf, char *code);
 EpslCtx *epsl_from_file(EpslErrorFn errf, char *filename);
@@ -79,7 +81,10 @@ void epsl_print_tokens(EpslCtx *ctx);
 void epsl_reg_var(EpslCtx *ctx, const char *id, EpslVal val);
 void epsl_reg_func(EpslCtx *ctx, const char *name, EpslRegFunc rf);
 
-char *epsl_val_get_str(EpslVal *v);
-void epsl_val_set_str(EpslCtx *ctx, EpslVal *v, char *str);
+EpslString *epsl_val_get_str(EpslVal val);
+void epsl_val_set_str(EpslCtx *ctx, EpslVal val, char *str);
+void epsl_list_append(EpslVals *list, EpslVal v);
+
+void epsl_throw_error(EpslCtx *ctx, EpslLocation loc, char *msg);
 
 #endif

@@ -47,7 +47,7 @@ struct Val {
 typedef struct EvalCtx EvalCtx;
 typedef Val (*RegFunc)(EvalCtx *ctx, Location call_loc, Vals args);
 
-#define NULL_VAL ((Val){0})
+#define VNONE ((Val){0})
 #define VDICT(v) ((ValDict*)v.as.gc_obj->data)
 #define VLIST(v) ((Vals*)v.as.gc_obj->data)
 #define VSTR(v) ((StringBuilder*)v.as.gc_obj->data)

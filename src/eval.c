@@ -175,15 +175,15 @@ void eval_val_mut(EvalCtx *ctx, Location op_loc, AST_Op op, Val *mut, Val to) {
 Val eval_binop(EvalCtx *ctx, AST *n) {
 	AST_Op op = n->as.bin_expr.op;
 	Val lv = eval(ctx, n->as.bin_expr.lhs);
-	if (ctx->err_ctx.got_err) return NULL_VAL;
+	if (ctx->err_ctx.got_err) return VNONE;
 	Val rv = eval(ctx, n->as.bin_expr.rhs);
-	if (ctx->err_ctx.got_err) return NULL_VAL;
+	if (ctx->err_ctx.got_err) return VNONE;
 	int lk = lv.kind, rk = rv.kind;
 
 	if (op == AST_OP_MOD) {
 		if (lk != VAL_INT || rk != VAL_INT) {
 			eval_error(ctx, n->loc, "wrong value");
-			return NULL_VAL;
+			return VNONE;
 		}
 
 		return (Val){
@@ -228,14 +228,14 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 		return (Val){.kind = VAL_INT, .as.vint = binop(ctx, n->loc, op, vget(lv), vget(rv))};
 	} else if (lk == VAL_DICT && op == AST_OP_ARR) {
 		Val *val = ValDict_get(VDICT(lv), rv);
-		if (!val) return NULL_VAL;
+		if (!val) return VNONE;
 		return *val;
 	} else if (lk == VAL_LIST && rk == VAL_INT && op == AST_OP_ARR) {
 		if (rv.as.vint < 0 || rv.as.vint > VLIST(lv)->count) {
 			char err[512];
 			sprintf(err, "index %lli is not in the range 0..%zu", rv.as.vint, VLIST(lv)->count);
 			eval_error(ctx, n->loc, err);
-			return NULL_VAL;
+			return VNONE;
 		}
 
 		return da_get(VLIST(lv), rv.as.vint);
@@ -244,12 +244,12 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 		.as.vfloat = binop(ctx, n->loc, op, vget(lv), vget(rv))
 	};
 
-	return NULL_VAL;
+	return VNONE;
 }
 
 Val eval(EvalCtx *ctx, AST *n) {
 	if (ctx->err_ctx.got_err)
-		return NULL_VAL;
+		return VNONE;
 
 	switch (n->kind) {
 		case AST_PROG:
@@ -260,7 +260,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 			da_foreach (AST*, st, &n->as.body) {
 				if (st == NULL) continue;
 				Val res = eval(ctx, *st);
-				if (ctx->err_ctx.got_err) return NULL_VAL;
+				if (ctx->err_ctx.got_err) return VNONE;
 				if (ctx->state == EVAL_CTX_RET ||
 					ctx->state == EVAL_CTX_CONT ||
 					ctx->state == EVAL_CTX_BREAK) {
@@ -280,11 +280,11 @@ Val eval(EvalCtx *ctx, AST *n) {
 			});
 
 			if (ctx->err_ctx.got_err)
-				return NULL_VAL;
+				return VNONE;
 		} break;
 
 		case AST_VAL_NONE: {
-			return NULL_VAL;
+			return VNONE;
 		} break;
 
 		case AST_LIT: {
@@ -322,7 +322,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 			da_foreach (AST*, it, &n->as.list) {
 				Val res = eval(ctx, *it);
 				da_append(VLIST(list), res);
-				if (ctx->err_ctx.got_err) return NULL_VAL;
+				if (ctx->err_ctx.got_err) return VNONE;
 			}
 
 			return list;
@@ -332,9 +332,9 @@ Val eval(EvalCtx *ctx, AST *n) {
 			Val dict = eval_new_heap_val(ctx, VAL_DICT);
 			da_foreach (AST*, it, &n->as.dict) {
 				Val lv = eval(ctx, (*it)->as.bin_expr.lhs);
-				if (ctx->err_ctx.got_err) return NULL_VAL;
+				if (ctx->err_ctx.got_err) return VNONE;
 				Val rv = eval(ctx, (*it)->as.bin_expr.rhs);
-				if (ctx->err_ctx.got_err) return NULL_VAL;
+				if (ctx->err_ctx.got_err) return VNONE;
 				ValDict_add(VDICT(dict), lv, rv);
 			}
 
@@ -345,7 +345,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 			EvalSymbol *es = eval_stack_get(ctx, n->as.var);
 			if (!es) {
 				eval_error(ctx, n->loc, "no such symbol");
-				return NULL_VAL;
+				return VNONE;
 			}
 
 			if (es->kind != EVAL_SYMB_VAR)
@@ -363,21 +363,21 @@ Val eval(EvalCtx *ctx, AST *n) {
 					AST *lhs = n->as.bin_expr.lhs;
 					AST *rhs = n->as.bin_expr.rhs;
 					Val rhs_val = eval(ctx, rhs);
-					if (ctx->err_ctx.got_err) return NULL_VAL;
+					if (ctx->err_ctx.got_err) return VNONE;
 
 					if (lhs->kind == AST_BIN_EXPR && lhs->as.bin_expr.op == AST_OP_ARR) {
 						char *var_id = lhs->as.bin_expr.lhs->as.var;
 						EvalSymbol *es = eval_stack_get(ctx, var_id);
 						if (!es) {
 							eval_error(ctx, n->loc, "no such symbol");
-							return NULL_VAL;
+							return VNONE;
 						} else if (es->kind != EVAL_SYMB_VAR) {
 							eval_error(ctx, n->loc, "no such variable");
-							return NULL_VAL;
+							return VNONE;
 						}
 
 						Val key = eval(ctx, lhs->as.bin_expr.rhs);
-						if (ctx->err_ctx.got_err) return NULL_VAL;
+						if (ctx->err_ctx.got_err) return VNONE;
 
 						if (es->as.var.val.kind == VAL_LIST) {
 							if (key.as.vint < 0 || key.as.vint > VLIST(es->as.var.val)->count) {
@@ -386,12 +386,12 @@ Val eval(EvalCtx *ctx, AST *n) {
 									"index %lli is not in the range 0..%zu",
 									key.as.vint, VLIST(es->as.var.val)->count);
 								eval_error(ctx, n->as.bin_expr.lhs->loc, err);
-								return NULL_VAL;
+								return VNONE;
 							}
 
 							Val *list_val = &da_get(VLIST(es->as.var.val), key.as.vint);
 							eval_val_mut(ctx, n->loc, n->as.bin_expr.op, list_val, rhs_val);
-							if (ctx->err_ctx.got_err) return NULL_VAL;
+							if (ctx->err_ctx.got_err) return VNONE;
 						} else if (es->as.var.val.kind == VAL_DICT) {
 							Val *dict_val = ValDict_get(VDICT(es->as.var.val), key);
 							if (!dict_val) ValDict_add(VDICT(es->as.var.val), key, rhs_val);
@@ -402,16 +402,16 @@ Val eval(EvalCtx *ctx, AST *n) {
 						EvalSymbol *es = eval_stack_get(ctx, var_id);
 						if (!es) {
 							eval_error(ctx, n->loc, "no such symbol");
-							return NULL_VAL;
+							return VNONE;
 						} else if (es->kind != EVAL_SYMB_VAR) {
 							eval_error(ctx, n->loc, "no such variable");
-							return NULL_VAL;
+							return VNONE;
 						}
 
 						eval_val_mut(ctx, n->loc, n->as.bin_expr.op, &es->as.var.val, rhs_val);
 					} else {
 						eval_error(ctx, n->loc, "EQ is used incorrectly");
-						return NULL_VAL;
+						return VNONE;
 					}
 				} break;
 
@@ -434,10 +434,10 @@ Val eval(EvalCtx *ctx, AST *n) {
 
 		case AST_ST_IF: {
 			Val cond = eval(ctx, n->as.st_if_chain.cond);
-			if (ctx->err_ctx.got_err) return NULL_VAL;
+			if (ctx->err_ctx.got_err) return VNONE;
 			if (cond.kind != VAL_BOOL) {
 				eval_error(ctx, n->loc, "boolean expected");
-				return NULL_VAL;
+				return VNONE;
 			}
 
 			if (cond.as.vbool)
@@ -449,21 +449,21 @@ Val eval(EvalCtx *ctx, AST *n) {
 		case AST_ST_FOR: {
 			size_t stack_count_before = ctx->stack.count;
 			Val var = eval(ctx, n->as.st_for.var);
-			if (ctx->err_ctx.got_err) return NULL_VAL;
+			if (ctx->err_ctx.got_err) return VNONE;
 			bool remove_last = ctx->stack.count != stack_count_before;
 
 			for (;;) {
 				Val cond = eval(ctx, n->as.st_for.cond);
-				if (ctx->err_ctx.got_err) return NULL_VAL;
+				if (ctx->err_ctx.got_err) return VNONE;
 				if (cond.kind != VAL_BOOL) {
 					eval_error(ctx, n->loc, "boolean expected");
-					return NULL_VAL;
+					return VNONE;
 				}
 				
 				if (!cond.as.vbool) break;
 
 				Val res = eval(ctx, n->as.st_for.body);
-				if (ctx->err_ctx.got_err) return NULL_VAL;
+				if (ctx->err_ctx.got_err) return VNONE;
 				if (ctx->state == EVAL_CTX_BREAK) {
 					ctx->state = EVAL_CTX_NONE; break;
 				} else if (ctx->state == EVAL_CTX_CONT) {
@@ -473,7 +473,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 				}
 
 				eval(ctx, n->as.st_for.mut);
-				if (ctx->err_ctx.got_err) return NULL_VAL;
+				if (ctx->err_ctx.got_err) return VNONE;
 			}
 
 			if (remove_last)
@@ -483,7 +483,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 		case AST_ST_FOREACH: {
 			char *var_id = n->as.st_foreach.var_id;
 			Val coll = eval(ctx, n->as.st_foreach.coll);
-			if (ctx->err_ctx.got_err) return NULL_VAL;
+			if (ctx->err_ctx.got_err) return VNONE;
 
 			for (size_t i = 0; i < VLIST(coll)->count; i++) {
 				Val x = VLIST(coll)->items[i];
@@ -494,7 +494,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 				});
 
 				Val res = eval(ctx, n->as.st_for.body);
-				if (ctx->err_ctx.got_err) return NULL_VAL;
+				if (ctx->err_ctx.got_err) return VNONE;
 				ctx->stack.count--;
 				if (ctx->state == EVAL_CTX_BREAK) {
 					ctx->state = EVAL_CTX_NONE; break;
@@ -508,23 +508,23 @@ Val eval(EvalCtx *ctx, AST *n) {
 
 		case AST_ST_WHILE: {
 			Val cond = eval(ctx, n->as.st_while.cond);
-			if (ctx->err_ctx.got_err) return NULL_VAL;
+			if (ctx->err_ctx.got_err) return VNONE;
 			if (cond.kind != VAL_BOOL) {
 				eval_error(ctx, n->loc, "boolean expected");
-				return NULL_VAL;
+				return VNONE;
 			}
 
 			while (true) {
 				Val cond = eval(ctx, n->as.st_while.cond);
 				if (cond.kind != VAL_BOOL) {
 					eval_error(ctx, n->loc, "boolean expected");
-					return NULL_VAL;
+					return VNONE;
 				}
 
 				if (!cond.as.vbool) break;
 
 				Val res = eval(ctx, n->as.st_while.body);
-				if (ctx->err_ctx.got_err) return NULL_VAL;
+				if (ctx->err_ctx.got_err) return VNONE;
 				if (ctx->state == EVAL_CTX_BREAK) {
 					ctx->state = EVAL_CTX_NONE; break;
 				} else if (ctx->state == EVAL_CTX_CONT) {
@@ -540,7 +540,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 			EvalSymbol *func = eval_stack_get(ctx, n->as.func_call.id);
 			if (!func) {
 				eval_error(ctx, n->loc, "no such symbol");
-				return NULL_VAL;
+				return VNONE;
 			}
 
 			if (func->kind == EVAL_SYMB_FUNC) {
@@ -558,13 +558,13 @@ Val eval(EvalCtx *ctx, AST *n) {
 							va_args = eval_new_heap_val(ctx, VAL_LIST);
 						Val va_arg = eval(ctx, func_call_arg);
 						da_append(VLIST(va_args), va_arg);
-						if (ctx->err_ctx.got_err) return NULL_VAL;
+						if (ctx->err_ctx.got_err) return VNONE;
 						continue;
 					}
 
 					if (i >= func_def->as.func_def.args.count) {
 						eval_error(ctx, n->loc, "wrong amount of arguments");
-						return NULL_VAL;
+						return VNONE;
 					}
 
 					AST *func_def_arg = da_get(&func_def->as.func_def.args, i);
@@ -580,7 +580,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 					});
 
 					if (ctx->err_ctx.got_err)
-						return NULL_VAL;
+						return VNONE;
 				}
 
 				if (found_any) {
@@ -593,7 +593,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 
 				ctx->state = EVAL_CTX_NONE;
 				res = eval(ctx, func->as.func.node->as.func_def.body);
-				if (ctx->err_ctx.got_err) return NULL_VAL;
+				if (ctx->err_ctx.got_err) return VNONE;
 
 				ctx->state = EVAL_CTX_NONE;
 				ctx->stack.count = stack_size;
@@ -602,7 +602,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 				da_foreach (AST*, it, &n->as.func_call.args) {
 					Val res = eval(ctx, *it);
 					da_append(&args, res);
-					if (ctx->err_ctx.got_err) return NULL_VAL;
+					if (ctx->err_ctx.got_err) return VNONE;
 				}
 
 				ErrorCtx ec = { .errf = ctx->err_ctx.errf };
@@ -636,7 +636,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 		default: assert(0);
 	}
 
-	return NULL_VAL;
+	return VNONE;
 }
 
 GC_Object *eval_gc_alloc(EvalCtx *ctx, int val_kind) {

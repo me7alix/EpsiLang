@@ -7,4 +7,4 @@ fn fact(n) {
 }
 
 x := int(input("enter x: "));
-print("x! = " + str(fact(x)));
+println("x! = ", fact(x));

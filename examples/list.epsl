@@ -1,21 +1,22 @@
 nums := [1, 2];
+println(kind(nums));
 
 append(nums, 3, 4, 5);
-print(nums);
+println(nums);
 
 nums[1] = 777;
-print(nums);
+println(nums);
 
 remove(nums, 1);
-print(nums);
+println(nums);
 
 insert(nums, 0, 101);
-print(nums);
+println(nums);
 
 for n in nums {
-	print(n);
+	println(n);
 }
 
-print("has 3:", has(nums, 3));
-print("has 0:", has(nums, 0));
-print("has 101:", has(nums, 101));
+println("has 3: ", has(nums, 3));
+println("has 0: ", has(nums, 0));
+println("has 101: ", has(nums, 101));

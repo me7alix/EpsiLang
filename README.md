@@ -5,7 +5,7 @@ Epsilang - is an interpreted embeddable programming language written in C.
 
 ## Examples
 ```
-print("Hello, World!");
+println("Hello, World!");
 ```
 Check the [examples](./examples) directory to see what’s currently implemented.
 

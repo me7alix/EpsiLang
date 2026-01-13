@@ -1,7 +1,10 @@
 #include "../include/parser.h"
 #include "../include/eval.h"
-#include "../include/api.h"
 #include "../include/print.h"
+#include "../include/api.h"
+
+#define COPY(var_dst, src_var) \
+	memcpy(var_dst, src_var, sizeof(*var_dst))
 
 char *read_file(const char *filename) {
 	FILE *file = fopen(filename, "rb");
@@ -30,7 +33,7 @@ typedef struct {
 	EvalCtx eval_ctx;
 } EpslCtxR;
 
-extern void reg_stdlib(Parser *p, EvalCtx *ctx);
+extern void reg_stdlib(EvalCtx *ctx);
 
 EpslCtx *epsl_from_str(EpslErrorFn errf, char *code) {
 	EpslCtxR *ctx = malloc(sizeof(EpslCtxR));
@@ -45,8 +48,15 @@ EpslCtx *epsl_from_str(EpslErrorFn errf, char *code) {
 		.gc = {0},
 	};
 
-	reg_stdlib(&ctx->parser, &ctx->eval_ctx);
+	reg_stdlib(&ctx->eval_ctx);
 	return ctx;
+}
+
+void epsl_throw_error(EpslCtx *ctx, EpslLocation loc, char *msg) {
+	EpslCtxR *r = ctx;
+	r->eval_ctx.err_ctx.got_err = true;
+	Location rloc; COPY(&rloc, &loc);
+	r->eval_ctx.err_ctx.errf(rloc, ERROR_RUNTIME, msg);
 }
 
 EpslCtx *epsl_from_file(EpslErrorFn errf, char *filename) {
@@ -65,63 +75,68 @@ EpslCtx *epsl_from_file(EpslErrorFn errf, char *filename) {
 		.gc = {0},
 	};
 
-	reg_stdlib(&ctx->parser, &ctx->eval_ctx);
+	reg_stdlib(&ctx->eval_ctx);
 	return ctx;
 }
 
 void epsl_reg_func(EpslCtx *ctx, const char *id, EpslRegFunc rf) {
-	EpslCtxR *rctx = ctx;
-	eval_reg_func(&rctx->eval_ctx, id, (RegFunc) rf);
+	EpslCtxR *r = ctx;
+	eval_reg_func(&r->eval_ctx, id, (RegFunc) rf);
 }
 
 void epsl_reg_var(EpslCtx *ctx, const char *id, EpslVal val) {
-	EpslCtxR *rctx = ctx;
-	Val ev; memcpy(&ev, &val, sizeof(ev));
-	eval_reg_var(&rctx->eval_ctx, id, ev);
+	EpslCtxR *r = ctx;
+	Val ev; COPY(&ev, &val);
+	eval_reg_var(&r->eval_ctx, id, ev);
 }
 
 EpslResult epsl_eval(EpslCtx *ctx) {
-	EpslCtxR *rctx = ctx;
-	AST *ast = parse(&rctx->parser);
-	if (rctx->parser.err_ctx.got_err)
+	EpslCtxR *r = ctx;
+	AST *ast = parse(&r->parser);
+	if (r->parser.err_ctx.got_err)
 		return (EpslResult){.got_err = true};
 
 	EpslVal erv;
-	Val rv = eval(&rctx->eval_ctx, ast);
-	if (rctx->eval_ctx.err_ctx.got_err)
+	Val rv = eval(&r->eval_ctx, ast);
+	if (r->eval_ctx.err_ctx.got_err)
 		return (EpslResult){.got_err = true};
 
 	memcpy(&erv, &rv, sizeof(rv));
 	return (EpslResult){
 		.val = erv,
-		.got_err = true
+		.got_err = false
 	};
 }
 
 void epsl_print_ast(EpslCtx *ctx) {
-	EpslCtxR *rctx = ctx;
-	ast_print(parse(&rctx->parser), 0);
+	EpslCtxR *r = ctx;
+	ast_print(parse(&r->parser), 0);
 }
 
 void epsl_print_tokens(EpslCtx *ctx) {
-	EpslCtxR *rctx = ctx;
-	lexer_print(rctx->parser.lexer);
+	EpslCtxR *r = ctx;
+	lexer_print(r->parser.lexer);
 }
 
 EpslVal epsl_new_heap_val(EpslCtx *ctx, uint8_t kind) {
-	EpslCtxR *rctx = ctx;
-	Val val = eval_new_heap_val(&rctx->eval_ctx, kind);
-	EpslVal epsl_val;
-	memcpy(&epsl_val, &val, sizeof(val));
-	return epsl_val;
+	EpslCtxR *r = ctx;
+	Val val = eval_new_heap_val(&r->eval_ctx, kind);
+	EpslVal ev; COPY(&ev, &val);
+	return ev;
 }
 
-char *epsl_val_get_str(EpslVal *v) {
-	return VSTR((*(Val*)v))->items;
+EpslString *epsl_val_get_str(EpslVal val) {
+	Val v; COPY(&v, &val);
+	return (EpslString*)VSTR(v);
 }
 
-void epsl_val_set_str(EpslCtx *ctx, EpslVal *v, char *str) {
-	StringBuilder *sb = VSTR((*(Val*)v));
-	sb->count = 0;
+void epsl_val_set_str(EpslCtx *ctx, EpslVal val, char *str) {
+	Val v; COPY(&v, &val);
+	StringBuilder *sb = VSTR(v);
+	sb_reset(sb);
 	sb_appendf(sb, "%s", str);
+}
+
+void epsl_list_append(EpslVals *list, EpslVal v) {
+	da_append(list, v);
 }

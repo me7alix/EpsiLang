@@ -1,7 +1,6 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "../include/parser.h"
 #include "../include/eval.h"
 
 #define bstr(b) (b ? "true" : "false")
@@ -10,11 +9,12 @@
 do { \
 	(ec)->err_ctx.got_err = true; \
 	(ec)->err_ctx.errf(loc, ERROR_RUNTIME, msg); \
-	return NULL_VAL; \
+	return VNONE; \
 } while(0)
 
 void val_sprint_f(Val v, char *buf, int depth) {
 	switch (v.kind) {
+		case VAL_NONE:  sprintf(buf, "none");                 break;
 		case VAL_INT:   sprintf(buf, "%lli", v.as.vint);      break;
 		case VAL_FLOAT: sprintf(buf, "%lf", v.as.vfloat);     break;
 		case VAL_BOOL:  sprintf(buf, "%s", bstr(v.as.vbool)); break;
@@ -62,10 +62,6 @@ void val_sprint_f(Val v, char *buf, int depth) {
 			sprintf(buf, "%s", sb.items);
 			sb_free(&sb);
 		} break;
-
-		default:
-			sprintf(buf, "err");
-			break;
 	}
 }
 
@@ -100,6 +96,32 @@ Val Int(EvalCtx *ctx, Location call_loc, Vals args) {
 	}
 }
 
+Val Float(EvalCtx *ctx, Location call_loc, Vals args) {
+	if (args.count != 1)
+		err(ctx, call_loc, "float() accepts only 1 argument");
+
+	Val arg = args.items[0];
+	switch (arg.kind) {
+		case VAL_FLOAT:
+			return arg;
+
+		case VAL_INT:
+			return (Val){
+				.kind = VAL_INT,
+				.as.vfloat = (double) arg.as.vfloat
+			};
+
+		case VAL_STR: {
+			char *end;
+			return (Val){
+				.kind = VAL_FLOAT,
+				.as.vfloat = strtod(VSTR(arg)->items, &end),
+			};
+		}
+
+		default: err(ctx, call_loc, "cannot convert to float");
+	}
+}
 
 Val Len(EvalCtx *ctx, Location call_loc, Vals args) {
 	if (args.count != 1)
@@ -122,14 +144,13 @@ Val Len(EvalCtx *ctx, Location call_loc, Vals args) {
 }
 
 Val Str(EvalCtx *ctx, Location call_loc, Vals args) {
-	if (args.count != 1)
-		err(ctx, call_loc, "str() accepts only 1 argument");
-
 	Val str = eval_new_heap_val(ctx, VAL_STR);
+	char buf[1 << 16];
 
-	char buf[1024];
-	val_sprint(args.items[0], buf);
-	sb_appendf(VSTR(str), "%s", buf);
+	da_foreach (Val, v, &args) {
+		val_sprint(*v, buf);
+		sb_appendf(VSTR(str), "%s", buf);
+	}
 
 	return str;
 }
@@ -141,18 +162,23 @@ Val Error(EvalCtx *ctx, Location call_loc, Vals args) {
 		err(ctx, call_loc, "error() accepts only string");
 
 	err(ctx, call_loc, VSTR(args.items[0])->items);
-	return NULL_VAL;
+	return VNONE;
 }
 
 Val Print(EvalCtx *ctx, Location call_loc, Vals args) {
-	char buf[1024];
+	char buf[1 << 16];
 	da_foreach (Val, it, &args) {
 		val_sprint(*it, buf);
-		printf("%s ", buf);
+		printf("%s", buf);
 	}
 
+	return VNONE;
+}
+
+Val Println(EvalCtx *ctx, Location call_loc, Vals args) {
+	Print(ctx, call_loc, args);
 	printf("\n");
-	return NULL_VAL;
+	return VNONE;
 }
 
 Val Input(EvalCtx *ctx, Location call_loc, Vals args) {
@@ -167,37 +193,6 @@ Val Input(EvalCtx *ctx, Location call_loc, Vals args) {
 	sb_appendf(VSTR(str), "%s", res);
 
 	return str;
-}
-
-Val Exit(EvalCtx *ctx, Location call_loc, Vals args) {
-	if (args.count != 1)
-		err(ctx, call_loc, "exit() accepts only 1 argument");
-
-	if (args.items[0].kind != VAL_INT)
-		err(ctx, call_loc, "exit() accepts only integer");
-
-	exit(args.items[0].as.vint);
-	return NULL_VAL;
-}
-
-Val System(EvalCtx *ctx, Location call_loc, Vals args) {
-	if (args.count == 0)
-		err(ctx, call_loc, "arguments were not provided");
-
-	StringBuilder str = {0};
-	for (size_t i = 0; i < args.count; i++) {
-		if (args.items[i].kind != VAL_STR)
-			err(ctx, call_loc, "system() accepts only strings");
-		sb_appendf(&str, "%s ", VSTR(args.items[i])->items);
-	}
-
-	int res = system(str.items);
-	sb_free(&str);
-
-	return (Val){
-		.kind = VAL_INT,
-		.as.vint = res,
-	};
 }
 
 Val Append(EvalCtx *ctx, Location call_loc, Vals args) {
@@ -217,27 +212,27 @@ Val Append(EvalCtx *ctx, Location call_loc, Vals args) {
 		}
 	} else err(ctx, call_loc, "append() accepts only list or string");
 
-	return NULL_VAL;
+	return VNONE;
 }
 
 Val Remove(EvalCtx *ctx, Location call_loc, Vals args) {
 	if (args.count != 2)
-		goto err;
+		goto error;
 
 	Val list = args.items[0];
 	if (list.kind != VAL_LIST)
-		goto err;
+		goto error;
 
 	Val ind = args.items[1];
 	if (ind.kind != VAL_INT)
-		goto err;
+		goto error;
 
 	da_remove_ordered(VLIST(list), ind.as.vint);
-	return NULL_VAL;
+	return VNONE;
 
-err:
+error:
 	err(ctx, call_loc, "remove() accepts list and index");
-	return NULL_VAL;
+	return VNONE;
 }
 
 Val Range(EvalCtx *ctx, Location call_loc, Vals args) {
@@ -247,13 +242,13 @@ Val Range(EvalCtx *ctx, Location call_loc, Vals args) {
 
 	if (args.count < 1 || args.count > 3) {
 		err(ctx, call_loc, "range() accepts 1, 2 and 3 arguments");
-		return NULL_VAL;
+		return VNONE;
 	}
 
 	da_foreach (Val, val, &args) {
 		if (val->kind != VAL_INT) {
 			err(ctx, call_loc, "range() accepts only integers");
-			return NULL_VAL;
+			return VNONE;
 		}
 	}
 
@@ -282,29 +277,39 @@ Val Range(EvalCtx *ctx, Location call_loc, Vals args) {
 
 Val Insert(EvalCtx *ctx, Location call_loc, Vals args) {
 	if (args.count != 3)
-		goto err;
+		goto error;
 
 	if (args.items[0].kind != VAL_LIST)
-		goto err;
+		goto error;
 
 	Vals *list = VLIST(args.items[0]);
 	Val ind = args.items[1];
 	if (ind.kind != VAL_INT)
-		goto err;
+		goto error;
 
 	Val val = args.items[2];
 
-	if (val.kind != VAL_INT) goto err;
+	if (val.kind != VAL_INT) goto error;
 	da_insert(list, ind.as.vint, val);
-	return NULL_VAL;
+	return VNONE;
 
-err:
+error:
 	err(ctx, call_loc, "insert() accepts: list, index and value");
+}
+
+Val Kind(EvalCtx *ctx, Location call_loc, Vals args) {
+	if (args.count != 1)
+		err(ctx, call_loc, "kind() accepts only 1 argument");
+
+	return (Val){
+		.kind = VAL_INT,
+		.as.vint = args.items[0].kind,
+	};
 }
 
 Val Has(EvalCtx *ctx, Location call_loc, Vals args) {
 	if (args.count != 2)
-		goto err;
+		goto error;
 
 	bool res = false;
 
@@ -321,50 +326,42 @@ Val Has(EvalCtx *ctx, Location call_loc, Vals args) {
 				break;
 			}
 		}
-	} else goto err;
+	} else goto error;
 
 	return (Val){
 		.kind = VAL_BOOL,
 		.as.vbool = res,
 	};
 
-err:
+error:
 	err(ctx, call_loc, "has() accepts: dictionary or list, item");
-	return NULL_VAL;
+	return VNONE;
 }
 
-
-void reg_platform(Parser *p, EvalCtx *ctx) {
-	Val str = eval_new_heap_val(ctx, VAL_STR);
-
-	char *platform;
-#if defined(_WIN32)
-	platform = "WINDOWS";
-#elif defined(__linux__)
-	platform = "LINUX";
-#elif defined(__APPLE__)
-	platform = "APPLE";
-#else
-	platform = "NONE";
-#endif
-
-	sb_appendf(VSTR(str), "%s", platform);
-	eval_reg_var(ctx, "_OS_", str);
+void reg_kinds(EvalCtx *ctx) {
+	eval_reg_var(ctx, "_VAL_NONE_",  (Val){.kind = VAL_INT, .as.vint = VAL_NONE});
+	eval_reg_var(ctx, "_VAL_INT_",   (Val){.kind = VAL_INT, .as.vint = VAL_INT});
+	eval_reg_var(ctx, "_VAL_BOOL_",  (Val){.kind = VAL_INT, .as.vint = VAL_BOOL});
+	eval_reg_var(ctx, "_VAL_FLOAT_", (Val){.kind = VAL_INT, .as.vint = VAL_FLOAT});
+	eval_reg_var(ctx, "_VAL_LIST_",  (Val){.kind = VAL_INT, .as.vint = VAL_LIST});
+	eval_reg_var(ctx, "_VAL_DICT_",  (Val){.kind = VAL_INT, .as.vint = VAL_DICT});
+	eval_reg_var(ctx, "_VAL_STR_",   (Val){.kind = VAL_INT, .as.vint = VAL_STR});
 }
 
-void reg_stdlib(Parser *p, EvalCtx *ctx) {
-	reg_platform(p, ctx);
-	eval_reg_func(ctx, "len",    Len);
-	eval_reg_func(ctx, "int",    Int);
-	eval_reg_func(ctx, "str",    Str);
-	eval_reg_func(ctx, "print",  Print);
-	eval_reg_func(ctx, "input",  Input);
-	eval_reg_func(ctx, "range",  Range);
-	eval_reg_func(ctx, "append", Append);
-	eval_reg_func(ctx, "has",    Has);
-	eval_reg_func(ctx, "remove", Remove);
-	eval_reg_func(ctx, "insert", Insert);
-	eval_reg_func(ctx, "exit",   Exit);
-	eval_reg_func(ctx, "system", System);
-	eval_reg_func(ctx, "error",  Error);
+void reg_stdlib(EvalCtx *ctx) {
+	reg_kinds(ctx);
+	eval_reg_func(ctx, "len",     Len);
+	eval_reg_func(ctx, "int",     Int);
+	eval_reg_func(ctx, "float",   Float);
+	eval_reg_func(ctx, "str",     Str);
+	eval_reg_func(ctx, "print",   Print);
+	eval_reg_func(ctx, "println", Println);
+	eval_reg_func(ctx, "input",   Input);
+	eval_reg_func(ctx, "range",   Range);
+	eval_reg_func(ctx, "append",  Append);
+	eval_reg_func(ctx, "has",     Has);
+	eval_reg_func(ctx, "remove",  Remove);
+	eval_reg_func(ctx, "insert",  Insert);
+	eval_reg_func(ctx, "kind",    Kind);
+	eval_reg_func(ctx, "error",   Error);
 }

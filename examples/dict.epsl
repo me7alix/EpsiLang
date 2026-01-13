@@ -13,10 +13,10 @@ dict := {
 dict["nine"] = 9;
 dict["one"] = 1;
 
-print(dict);
+println(dict);
 
 while true {
 	key := input("enter digit key: ");
-	if has(dict, key) -> print("digit: " + str(dict[key]));
-	else              -> print("no such digit");
+	if has(dict, key) -> println("digit: ", str(dict[key]));
+	else              -> println("no such digit");
 }
