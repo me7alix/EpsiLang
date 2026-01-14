@@ -548,6 +548,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 				AST *func_def = func->as.func.node;
 				bool found_any = false;
 				Val va_args = {0};
+				size_t args_cnt = 0;
 
 				for (size_t i = 0; i < n->as.func_call.args.count; i++) {
 					AST *func_call_arg = da_get(&n->as.func_call.args, i);
@@ -573,6 +574,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 						goto found_any;
 					}
 
+					args_cnt++;
 					eval_stack_add(ctx, (EvalSymbol){
 						.kind = EVAL_SYMB_VAR,
 						.id = func_def_arg->as.var,
@@ -589,6 +591,11 @@ Val eval(EvalCtx *ctx, AST *n) {
 						.id = "_VA_ARGS_",
 						.as.var.val = va_args,
 					});
+				}
+
+				if (args_cnt < func_def->as.func_def.args.count) {
+					eval_error(ctx, n->loc, "wrong amount of arguments");
+					return VNONE;
 				}
 
 				ctx->state = EVAL_CTX_NONE;
