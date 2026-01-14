@@ -1,0 +1,38 @@
+fromX := 0 - 2.0;
+fromY := 0 - 1.1;
+toX := 1.0;
+toY := 1.1;
+stepX := 0.035;
+stepY := 0.08;
+
+grad := [" ", ".", ",", ":", ";", "i", "l", "o", "x", "O", "#", "@"];
+
+fn mult_real(r1, i1, r2, i2) => r1 * r2 - i1 * i2;
+fn mult_imag(r1, i1, r2, i2) => r1 * i2 + i1 * r2;
+
+for i := fromY; i < toY; i += stepY {
+	for j := fromX; j < toX; j += stepX {
+		c_r := j; c_i := i;
+		z_r := j; z_i := i;
+
+		iter := 0;
+		iters := 100;
+		threshold := 5;
+
+		for iter = 0; iter < iters; iter+=1 {
+			tmp_r := mult_real(z_r, z_i, z_r, z_i) + c_r;
+			tmp_i := mult_imag(z_r, z_i, z_r, z_i) + c_i;
+
+			z_r = tmp_r;
+			z_i = tmp_i;
+
+			if z_i * z_i + z_r * z_r > 4 -> break;
+		}
+
+		cg := int(float(iter) / iters * (len(grad) - 1));
+		if iter > threshold -> print(grad[cg]);
+		else                -> print(" ");
+	}
+
+	print("\n");
+}
