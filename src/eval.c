@@ -593,7 +593,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 					});
 				}
 
-				if (args_cnt < func_def->as.func_def.args.count) {
+				if (!found_any && args_cnt < func_def->as.func_def.args.count) {
 					eval_error(ctx, n->loc, "wrong amount of arguments");
 					return VNONE;
 				}
