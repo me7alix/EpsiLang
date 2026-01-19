@@ -13,10 +13,15 @@ println(nums);
 insert(nums, 0, 101);
 println(nums);
 
-for n in nums {
-	println(n);
+print("{ ");
+for n in nums ->
+	print(n, " ");
+println("}");
+
+fn check(nums, num) {
+	println("has ", num, ": ", has(nums, num));
 }
 
-println("has 3: ", has(nums, 3));
-println("has 0: ", has(nums, 0));
-println("has 101: ", has(nums, 101));
+check(nums, 3);
+check(nums, 0);
+check(nums, 101);

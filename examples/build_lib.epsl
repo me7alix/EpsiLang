@@ -35,7 +35,7 @@ cmd_debug_mode := false;
 fn cmd(...) {
 	command := join(_VA_ARGS_);
 	println("[CMD] ", command);
-	if cmd_debug_mode == false ->
+	if !cmd_debug_mode ->
 		system(command);
 }
 

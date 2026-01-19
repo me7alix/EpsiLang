@@ -256,8 +256,12 @@ Token lexer_next(Lexer *l) {
 							case '\\': sb_append(&sb, '\\'); break;
 							case '0':  sb_append(&sb, '\0'); break;
 							case 'n':  sb_append(&sb, '\n'); break;
+							case 'r':  sb_append(&sb, '\r'); break;
+							case 't':  sb_append(&sb, '\t'); break;
 							case '\"': sb_append(&sb, '\"'); break;
-							default: ret = token(l, TOK_ID, "wrong character");
+							default:
+								ret = token(l, TOK_ERR, "invalid character in the string");
+								goto exit;
 						}
 						l->cur_char++;
 					} else if (l->cur_char[0] == '\0') {
@@ -281,9 +285,13 @@ Token lexer_next(Lexer *l) {
 					switch (*l->cur_char) {
 						case '0':  ret = token(l, TOK_CHAR, "\0"); break;
 						case 'n':  ret = token(l, TOK_CHAR, "\n"); break;
+						case 'r':  ret = token(l, TOK_CHAR, "\r"); break;
+						case 't':  ret = token(l, TOK_CHAR, "\t"); break;
 						case '\\': ret = token(l, TOK_CHAR, "\\"); break;
 						case '\'': ret = token(l, TOK_CHAR, "'");  break;
-						default: ret = token(l, TOK_ID, "wrong character");
+						default:
+							ret = token(l, TOK_ERR, "invalid character");
+							goto exit;
 					}
 				} else ret = token(l, TOK_CHAR, l->cur_char);
 
@@ -305,7 +313,7 @@ Token lexer_next(Lexer *l) {
 				ret = token(l, TOK_ID, get_word(l));
 			}
 
-			else ret = token(l, TOK_ID, "unknown token");
+			else ret = token(l, TOK_ERR, "unknown token");
 		} break;
 	}
 

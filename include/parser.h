@@ -27,6 +27,8 @@ typedef enum {
 	AST_OP_ARR,
 	AST_OP_MOD,
 	AST_OP_PAIR,
+	AST_OP_NOT,
+	AST_OP_NEG,
 } AST_Op;
 
 typedef struct {
@@ -119,6 +121,10 @@ struct AST {
 			AST *lhs;
 			AST *rhs;
 		} bin_expr;
+		struct {
+			AST_Op op;
+			AST *v;
+		} un_expr;
 		struct {
 			char *id;
 			ASTs args;

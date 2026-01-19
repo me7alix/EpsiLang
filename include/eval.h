@@ -12,9 +12,9 @@ typedef struct {
 	void *data;
 } GC_Object;
 
-#define GC_INIT_THRESHOLD 128
+#define GC_INIT_THRESHOLD 256
 #define GC_GROWTH_FACTOR 2
-#define GC_MIN_GROWTH 48
+#define GC_MIN_GROWTH 64
 
 typedef struct {
 	DA(GC_Object*) objs;

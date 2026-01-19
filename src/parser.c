@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include "../include/parser.h"
 
 void parser_error(Parser *p, Location loc, char *msg) {
@@ -60,50 +61,23 @@ uint ast_op_precedence(AST_Op op, bool l) {
 			return l ? 80 : 81;
 		case AST_OP_ARR:
 			return l ? 100 : 101;
+		case AST_OP_NOT:
+		case AST_OP_NEG:
+			return l ? 0 : 111;
 		default: return 0;
 	}
 }
 
-AST *parse_expand(Parser *p, ASTs *nodes) {
-	if (p->err_ctx.got_err) return NULL;
-	size_t cnt_before = nodes->count;
-
-	for (size_t i = 0; i < nodes->count; i++) {
-		if (nodes->count == 1)
-			return da_get(nodes, 0);
-
-		AST *node = da_get(nodes, i);
-		bool nlhs = node->as.bin_expr.lhs;
-		bool nrhs = node->as.bin_expr.rhs;
-
-		if (!(node->kind == AST_BIN_EXPR && (!nlhs || !nrhs))) {
-			uint lpr = 0, rpr = 0;
-
-			if (i > 0)
-				lpr = ast_op_precedence(da_get(nodes, i - 1)->as.bin_expr.op, false);
-
-			if (i < nodes->count - 1)
-				rpr = ast_op_precedence(da_get(nodes, i + 1)->as.bin_expr.op, true);
-
-			if (lpr == 0 && rpr == 0) {
-				parser_error(p, node->loc, "wrong expression");
-				return NULL;
-			}
-
-			if (lpr > rpr) da_get(nodes, i - 1)->as.bin_expr.rhs = node;
-			else           da_get(nodes, i + 1)->as.bin_expr.lhs = node;
-
-			da_remove_ordered(nodes, i);
-			i--;
-		}
+AST_Op ast_get_op(Parser *p, AST *a) {
+	switch (a->kind) {
+		case AST_UN_EXPR:
+			return a->as.un_expr.op;
+		case AST_BIN_EXPR:
+			return a->as.bin_expr.op;
+		default:
+			parser_error(p, a->loc, "invalid expression");
+			return 0;
 	}
-
-	if (cnt_before == nodes->count) {
-		parser_error(p, da_get(nodes, 0)->loc, "wrong expression");
-		return NULL;
-	}
-
-	return parse_expand(p, nodes);
 }
 
 typedef enum {
@@ -146,7 +120,7 @@ AST *parse_list(Parser *p) {
 				if (p->err_ctx.got_err) return NULL;
 				da_append(&list->as.list, expr);
 				if (peek(p).kind != TOK_CSQBRA && peek(p).kind != TOK_COM) {
-					parser_error(p, peek(p).loc, "wrong expression");
+					parser_error(p, peek(p).loc, "invalid expression");
 					return NULL;
 				}
 			} break;
@@ -189,13 +163,13 @@ AST *parse_dict(Parser *p) {
 				if (p->err_ctx.got_err) return NULL;
 
 				if (expr->kind != AST_BIN_EXPR && expr->as.bin_expr.op != AST_OP_PAIR) {
-					parser_error(p, expr->loc, "key value pair expected");
+					parser_error(p, expr->loc, "key-value pair expected");
 					return NULL;
 				}
 
 				da_append(&dict->as.dict, expr);
 				if (peek(p).kind != TOK_CBRA && peek(p).kind != TOK_COM) {
-					parser_error(p, peek(p).loc, "wrong expression");
+					parser_error(p, peek(p).loc, "invalid expression");
 					return NULL;
 				}
 			} break;
@@ -234,7 +208,7 @@ AST *parse_func_call(Parser *p) {
 				da_append(&func_call->as.func_call.args, expr);
 
 				if (peek(p).kind != TOK_CPAR && peek(p).kind != TOK_COM) {
-					parser_error(p, peek(p).loc, "wrong expression");
+					parser_error(p, peek(p).loc, "invalid expression");
 					return NULL;
 				}
 			} break;
@@ -400,7 +374,7 @@ AST *parse_func_def(Parser *p) {
 			} break;
 
 			default:
-				parser_error(p, peek(p).loc, "wrong function argument");
+				parser_error(p, peek(p).loc, "invalid function argument");
 				return NULL;
 		}
 
@@ -411,6 +385,71 @@ AST *parse_func_def(Parser *p) {
 
 	func_def->as.func_def.body = parse_body(p, false);
 	return func_def;
+}
+
+void ast_expr_set_val(AST *expr, AST *n, bool left) {
+	switch (expr->kind) {
+		case AST_BIN_EXPR: {
+			if (left) expr->as.bin_expr.lhs = n;
+			else      expr->as.bin_expr.rhs = n;
+		} break;
+
+		case AST_UN_EXPR: {
+			expr->as.un_expr.v = n;
+		} break;
+
+		default: assert(0);
+	}
+}
+
+AST *parse_expand(Parser *p, ASTs *nodes) {
+	if (p->err_ctx.got_err) return NULL;
+	size_t cnt_before = nodes->count;
+
+	for (size_t i = 0; i < nodes->count; i++) {
+		if (nodes->count == 1)
+			return da_last(nodes);
+
+		AST *node = da_get(nodes, i);
+		bool is_op = false;
+		if (node->kind == AST_BIN_EXPR) {
+			if (!node->as.bin_expr.lhs || !node->as.bin_expr.rhs)
+				is_op = true;
+		} else if (node->kind == AST_UN_EXPR) {
+			if (!node->as.un_expr.v)
+				is_op = true;
+		}
+
+		if (!is_op) {
+			uint lpr = 0, rpr = 0;
+
+			if (i > 0)
+				lpr = ast_op_precedence(ast_get_op(p, da_get(nodes, i - 1)), false);
+			if (p->err_ctx.got_err) return NULL;
+
+			if (i < nodes->count - 1)
+				rpr = ast_op_precedence(ast_get_op(p, da_get(nodes, i + 1)), true);
+			if (p->err_ctx.got_err) return NULL;
+
+			if (lpr == 0 && rpr == 0) {
+				parser_error(p, node->loc, "invalid combination of operator and operands");
+				return NULL;
+			}
+
+			if (lpr > rpr) ast_expr_set_val(da_get(nodes, i - 1), node, false);
+			else           ast_expr_set_val(da_get(nodes, i + 1), node, true);
+
+			da_remove_ordered(nodes, i);
+			i--;
+		}
+	}
+
+	if (cnt_before == nodes->count) {
+		parser_error(p, da_last(nodes)->loc, "invalid expression");
+		return NULL;
+	}
+
+	return parse_expand(p, nodes);
 }
 
 AST *parse_expr(Parser *p, ParseExprKind pek) {
@@ -519,16 +558,53 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 				}));
 			} break;
 
+			case TOK_EXC: {
+				da_append(&nodes, ast_alloc((AST){
+					.kind = AST_UN_EXPR,
+					.loc = peek(p).loc,
+					.as.un_expr.op = AST_OP_NOT,
+				}));
+			} break;
+
+			case TOK_MINUS: {
+				bool is_unary_op = false;
+				if (nodes.count == 0) {
+					is_unary_op = true;
+				} else {
+					if (da_last(&nodes)->kind == AST_UN_EXPR) {
+						is_unary_op = false;
+					} else {
+						bool is_bin_op = da_last(&nodes)->kind == AST_BIN_EXPR;
+						if (is_bin_op && da_last(&nodes)->as.bin_expr.lhs &&
+							da_last(&nodes)->as.bin_expr.rhs) is_bin_op = false;
+						if (is_bin_op) is_unary_op = true;
+					}
+				}
+
+				if (!is_unary_op) {
+					da_append(&nodes, ast_alloc((AST){
+						.kind = AST_BIN_EXPR,
+						.loc = peek(p).loc,
+						.as.bin_expr.op = AST_OP_SUB,
+					}));
+				} else {
+					da_append(&nodes, ast_alloc((AST){
+						.kind = AST_UN_EXPR,
+						.loc = peek(p).loc,
+						.as.un_expr.op = AST_OP_NEG,
+					}));
+				}
+			} break;
+
+			case TOK_EQ:      case TOK_OR:
+			case TOK_COL:     case TOK_PS:
+			case TOK_EQ_EQ:   case TOK_AND:
+			case TOK_PLUS:    case TOK_STAR:
+			case TOK_LESS:    case TOK_LESS_EQ:
+			case TOK_GREAT:   case TOK_GREAT_EQ:
 			case TOK_PLUS_EQ: case TOK_MINUS_EQ:
 			case TOK_STAR_EQ: case TOK_SLASH_EQ:
-			case TOK_LESS: case TOK_LESS_EQ:
-			case TOK_GREAT: case TOK_GREAT_EQ:
-			case TOK_EQ_EQ: case TOK_AND:
-			case TOK_PLUS: case TOK_MINUS:
-			case TOK_STAR: case TOK_SLASH:
-			case TOK_EQ: case TOK_OR:
-			case TOK_COL: case TOK_PS:
-			case TOK_NOT_EQ: {
+			case TOK_NOT_EQ:  case TOK_SLASH: {
 				TokenKind tk = peek(p).kind;
 				da_append(&nodes, ast_alloc((AST){
 					.kind = AST_BIN_EXPR,
@@ -545,7 +621,6 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 					tk == TOK_OR       ? AST_OP_OR       :
 					tk == TOK_EQ       ? AST_OP_EQ       :
 					tk == TOK_PLUS     ? AST_OP_ADD      :
-					tk == TOK_MINUS    ? AST_OP_SUB      :
 					tk == TOK_STAR     ? AST_OP_MUL      :
 					tk == TOK_SLASH    ? AST_OP_DIV      :
 					tk == TOK_PS       ? AST_OP_MOD      :
@@ -562,7 +637,7 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 					return NULL;
 				}
 
-				parser_error(p, peek(p).loc, "wrong expression");
+				parser_error(p, peek(p).loc, "invalid expression");
 				return NULL;
 			}
 		}
@@ -599,7 +674,7 @@ AST *parse_body(Parser *p, bool isProg) {
 		if (!(peek(p).kind == TOK_OBRA ||
 			peek(p).kind == TOK_ARROW ||
 			peek(p).kind == TOK_ARROW_EQ)) {
-			parser_error(p, peek(p).loc, "wrong body declaration");
+			parser_error(p, peek(p).loc, "invalid body declaration");
 			return NULL;
 		}
 

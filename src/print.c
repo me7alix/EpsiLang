@@ -18,6 +18,11 @@ void ast_print(AST *n, int spaces) {
 	const int gap = 2;
 	print_spaces(spaces);
 
+	if (n == NULL) {
+		printf("NULL\n");
+		return;
+	}
+
 	size_t ln = n->loc.line_num + 1;
 	size_t lc = n->loc.line_char - n->loc.line_start + 1;
 	printf("[%zu:%zu] ", ln, lc);
@@ -93,6 +98,14 @@ void ast_print(AST *n, int spaces) {
 				bop == AST_OP_DIV    ? "/"  : "E");
 			ast_print(n->as.bin_expr.lhs, spaces + gap);
 			ast_print(n->as.bin_expr.rhs, spaces + gap);
+		} break;
+
+		case AST_UN_EXPR: {
+			int op = n->as.un_expr.op;
+			printf("un_expr(%s):\n",
+				op == AST_OP_NOT    ? "!"  :
+				op == AST_OP_NEG    ? "-"  : "E");
+			ast_print(n->as.un_expr.v, spaces + gap);
 		} break;
 
 		case AST_RET: {
