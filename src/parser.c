@@ -14,14 +14,18 @@ AST *ast_alloc(AST ast) {
 	return n;
 }
 
-void expect(Parser *p, TokenKind tk) {
+#define expect(p, tk) expect_f(p, tk, #tk)
+void expect_f(Parser *p, TokenKind tk, char *tok_str) {
 	if (peek(p).kind == TOK_ERR) {
 		parser_error(p, peek(p).loc, peek(p).data);
 		return;
 	}
 
-	if (peek(p).kind != tk)
-		parser_error(p, peek(p).loc, "unexpected token");
+	if (peek(p).kind != tk) {
+		char err[1024];
+		sprintf(err, "%s expected", tok_str);
+		parser_error(p, peek(p).loc, err);
+	}
 }
 
 double parse_float(char *data) {
@@ -187,8 +191,8 @@ AST *parse_func_call(Parser *p) {
 		.loc = peek(p).loc,
 	});
 
-	func_call->as.func_call.id = next(p).data,
-		expect(p, TOK_OPAR); next(p);
+	func_call->as.func_call.id = next(p).data;
+	expect(p, TOK_OPAR); next(p);
 
 	for (;;) {
 		switch (peek(p).kind) {
@@ -692,12 +696,33 @@ AST *parse_body(Parser *p, bool isProg) {
 		switch (peek(p).kind) {
 			case TOK_IMPORT: {
 				next(p);
-				char *file = peek(p).data;
-				char *code = peek(p).data;
-				Parser np = {
-					.lexer = lexer_init(file, code),
-					.err_ctx = {0},
+				expect(p, TOK_STRING);
+				Parser ip = {
+					.lexer = lexer_from_file(peek(p).data),
+					.err_ctx = p->err_ctx,
 				};
+
+				if (!ip.lexer.cur_char) {
+					parser_error(p, peek(p).loc, "no such file");
+					p->err_ctx.got_err = true;
+					return NULL;
+				}
+
+				AST *ib = parse_body(&ip, true);
+				if (ip.err_ctx.got_err) {
+					p->err_ctx.got_err = true;
+					return NULL;
+				}
+
+				da_foreach (AST*, it, &ib->as.body) {
+					da_append(&body->as.body, *it);
+					if (ip.err_ctx.got_err) {
+						p->err_ctx.got_err = true;
+						return NULL;
+					}
+				}
+
+				next(p);
 			} break;
 
 			case TOK_ID: {

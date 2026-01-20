@@ -6,28 +6,6 @@
 #define COPY(var_dst, src_var) \
 	memcpy(var_dst, src_var, sizeof(*var_dst))
 
-char *read_file(const char *filename) {
-	FILE *file = fopen(filename, "rb");
-	if (!file) return NULL;
-
-	fseek(file, 0, SEEK_END);
-	long filesize = ftell(file);
-	rewind(file);
-
-	char *buffer = malloc(filesize + 1);
-	size_t read_size = fread(buffer, 1, filesize, file);
-	if (read_size != filesize) {
-		free(buffer);
-		fclose(file);
-		return NULL;
-	}
-
-	buffer[filesize] = '\0';
-	fclose(file);
-
-	return buffer;
-}
-
 typedef struct {
 	Parser parser;
 	EvalCtx eval_ctx;
@@ -38,7 +16,7 @@ extern void reg_stdlib(EvalCtx *ctx);
 EpslCtx *epsl_from_str(EpslErrorFn errf, char *code) {
 	EpslCtxR *ctx = malloc(sizeof(EpslCtxR));
 	ctx->parser = (Parser){
-		.lexer = lexer_init("script", code),
+		.lexer = lexer_from_str("script", code),
 		.err_ctx.errf = (ErrorFn) errf,
 	};
 
@@ -60,12 +38,12 @@ void epsl_throw_error(EpslCtx *ctx, EpslLocation loc, char *msg) {
 }
 
 EpslCtx *epsl_from_file(EpslErrorFn errf, char *filename) {
-	char *code = read_file(filename);
-	if (!code) return NULL;
+	Lexer lex = lexer_from_file(filename);
+	if (!lex.cur_char) return NULL;
 
 	EpslCtxR *ctx = malloc(sizeof(EpslCtxR));
 	ctx->parser = (Parser){
-		.lexer = lexer_init(filename, code),
+		.lexer = lex,
 		.err_ctx.errf = (ErrorFn) errf,
 	};
 

@@ -28,7 +28,8 @@ typedef struct {
 	Location cur_loc;
 } Lexer;
 
-Lexer lexer_init(char *file, char *code);
+Lexer lexer_from_str(char *file, char *code);
+Lexer lexer_from_file(char *file);
 Token lexer_next(Lexer *l);
 Token lexer_peek(Lexer *l);
 Token lexer_peek2(Lexer *l);

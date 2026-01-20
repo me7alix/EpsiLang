@@ -6,6 +6,28 @@
 #include "../include/lexer.h"
 #include "../3dparty/cplus.h"
 
+char *read_file(const char *filename) {
+	FILE *file = fopen(filename, "rb");
+	if (!file) return NULL;
+
+	fseek(file, 0, SEEK_END);
+	long filesize = ftell(file);
+	rewind(file);
+
+	char *buffer = malloc(filesize + 1);
+	size_t read_size = fread(buffer, 1, filesize, file);
+	if (read_size != filesize) {
+		free(buffer);
+		fclose(file);
+		return NULL;
+	}
+
+	buffer[filesize] = '\0';
+	fclose(file);
+
+	return buffer;
+}
+
 char *get_word(Lexer *lexer) {
 	while (*lexer->cur_char == ' ')
 		lexer->cur_char++;
@@ -45,7 +67,18 @@ bool is_tok(Lexer *lexer, const char *tok) {
 	return true;
 }
 
-Lexer lexer_init(char *file, char *code) {
+Lexer lexer_from_str(char *file, char *code) {
+	return (Lexer) {
+		.cur_loc.file = file,
+		.cur_loc.line_num = 0,
+		.cur_loc.line_start = code,
+		.cur_loc.line_char = code,
+		.cur_char = code,
+	};
+}
+
+Lexer lexer_from_file(char *file) {
+	char *code = read_file(file);
 	return (Lexer) {
 		.cur_loc.file = file,
 		.cur_loc.line_num = 0,
@@ -260,7 +293,7 @@ Token lexer_next(Lexer *l) {
 							case 't':  sb_append(&sb, '\t'); break;
 							case '\"': sb_append(&sb, '\"'); break;
 							default:
-								ret = token(l, TOK_ERR, "invalid character in the string");
+								ret = token(l, TOK_ERR, "the string contains invalid character");
 								goto exit;
 						}
 						l->cur_char++;

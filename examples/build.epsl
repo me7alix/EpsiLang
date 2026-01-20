@@ -1,0 +1,61 @@
+if _OS_ != "WINDOWS" && _OS_ != "LINUX" && _OS_ != "APPLE" {
+	println("OS is not supported");
+	exit(1);
+}
+
+fn join(arr) {
+	res := "";
+	for i := 0; i < len(arr); i+=1 {
+		append(res, arr[i]);
+		if i < len(arr) - 1 ->
+			append(res, " ");
+	}
+
+	return res;
+}
+
+fn path(...) {
+	res := "";
+	del := "";
+
+	for i := 0; i < len(_VA_ARGS_); i+=1 {
+		append(res, _VA_ARGS_[i]);
+
+		if _OS_ == "LINUX" || _OS_ == "APPLE" -> del = "/";
+		else if _OS_ == "WINDOWS"             -> del = "\\";
+
+		if i < len(_VA_ARGS_) - 1 ->
+			append(res, del);
+	}
+
+	return res;
+}
+
+fn cmd(...) {
+	command := join(_VA_ARGS_);
+	println("[CMD] ", command);
+	if !build_debug_mode ->
+		system(command);
+}
+
+fn make_dir(dir_name) {
+	if _OS_ == "LINUX" || _OS_ == "APPLE" {
+		cmd("mkdir", "-p", dir_name);
+	} else if _OS_ == "WINDOWS" {
+		cmd("md", dir_name);
+	}
+}
+
+fn copy_file(src, dst) {
+	if _OS_ == "LINUX" || _OS_ == "APPLE" {
+		cmd("cp", src, dst);
+	} else if _OS_ == "WINDOWS" {
+		cmd("copy", src, dst);
+	}
+}
+
+fn SO() {
+	if      _OS_ == "LINUX"   => ".so";
+	else if _OS_ == "WINDOWS" => ".dll";
+	else if _OS_ == "APPLE"   => ".dylib";
+}
