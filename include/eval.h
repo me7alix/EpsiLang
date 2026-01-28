@@ -8,7 +8,7 @@
 
 typedef struct {
 	bool marked;
-	u8 val_kind;
+	int val_kind;
 	void *data;
 } GC_Object;
 
@@ -26,7 +26,7 @@ typedef struct Val Val;
 typedef DA(Val) Vals;
 
 struct Val {
-	enum : u8 {
+	enum {
 		VAL_NONE,
 		VAL_INT,
 		VAL_FLOAT,
@@ -74,7 +74,7 @@ typedef struct {
 typedef DA(EvalSymbol) EvalStack;
 
 struct EvalCtx {
-	enum : u8 {
+	enum {
 		EVAL_CTX_NONE,
 		EVAL_CTX_RET,
 		EVAL_CTX_BREAK,
@@ -87,7 +87,7 @@ struct EvalCtx {
 };
 
 void eval_collect_garbage(EvalCtx *ctx);
-Val eval_new_heap_val(EvalCtx *ctx, u8 kind);
+Val eval_new_heap_val(EvalCtx *ctx, int kind);
 
 Val eval(EvalCtx *ctx, AST *n);
 void eval_reg_var(EvalCtx *ctx, const char *id, Val val);

@@ -481,7 +481,14 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 		switch (peek(p).kind) {
 			case TOK_OSQBRA: {
 				if (nodes.count > 0) {
-					if (da_last(&nodes)->kind == AST_VAR) {
+					AST *l = da_last(&nodes);
+					AST *ll = da_get(&nodes, nodes.count - 2);
+
+					bool is_var = l->kind == AST_VAR;
+					bool is_arr_op = nodes.count < 2 ? false :
+						ll->kind == AST_BIN_EXPR && ll->as.bin_expr.op == AST_OP_ARR;
+
+					if (is_arr_op || is_var) {
 						da_append(&nodes, ast_alloc((AST){
 							.kind = AST_BIN_EXPR,
 							.loc = next(p).loc,

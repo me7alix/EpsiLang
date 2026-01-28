@@ -5,6 +5,8 @@
 
 HT_IMPL(ValDict, Val, Val);
 
+#define INVALID_COMB "invalid combination of operand and operators"
+
 #define is_heap_val(vk) ( \
 	(vk).kind == VAL_DICT || \
 	(vk).kind == VAL_STR || \
@@ -16,7 +18,7 @@ void eval_stack_add(EvalCtx *ctx, EvalSymbol es) {
 	da_append(&ctx->stack, es);
 }
 
-Val eval_new_heap_val(EvalCtx *ctx, u8 kind) {
+Val eval_new_heap_val(EvalCtx *ctx, int kind) {
 	Val hv = {
 		.kind = kind,
 		.as.gc_obj = eval_gc_alloc(ctx, kind),
@@ -24,14 +26,11 @@ Val eval_new_heap_val(EvalCtx *ctx, u8 kind) {
 
 	eval_stack_add(ctx, (EvalSymbol){
 		.kind = EVAL_SYMB_TEMP,
-		.id = "",
 		.as.temp.val = hv,
 	});
 
 	return hv;
 }
-
-#define INVALID_COMB "invalid combination of operand and operators"
 
 void eval_error(EvalCtx *ctx, Location loc, char *msg) {
 	ctx->err_ctx.got_err = true;
@@ -40,8 +39,10 @@ void eval_error(EvalCtx *ctx, Location loc, char *msg) {
 
 EvalSymbol *eval_stack_get(EvalCtx *es, char *id) {
 	for (int i = es->stack.count - 1; i >= 0; i--) {
-		if (strcmp(da_get(&es->stack, i).id, id) == 0) {
-			return &da_get(&es->stack, i);
+		if (da_get(&es->stack, i).kind != EVAL_SYMB_TEMP) {
+			if (strcmp(da_get(&es->stack, i).id, id) == 0) {
+				return &da_get(&es->stack, i);
+			}
 		}
 	}
 
@@ -141,7 +142,7 @@ int ValDict_compare(Val a, Val b) {
 
 void eval_val_mut(EvalCtx *ctx, Location op_loc, AST_Op op, Val *mut, Val to) {
 	if ((is_heap_val(*mut) || is_heap_val(to)) && op != AST_OP_EQ) {
-		eval_error(ctx, op_loc, "invalid combination of operator and operands");
+		eval_error(ctx, op_loc, INVALID_COMB);
 		return;
 	}
 
@@ -250,7 +251,8 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 		eval_error(ctx, n->loc, INVALID_COMB);
 	} else if (lk == VAL_STR && rk == VAL_STR && op == AST_OP_ADD) {
 		Val str = eval_new_heap_val(ctx, VAL_STR);
-		sb_appendf(VSTR(str), "%s%s", VSTR(lv)->items, VSTR(rv)->items);
+		StringBuilder *sb = VSTR(str), *lvsb = VSTR(lv), *rvsb = VSTR(rv);
+		sb_appendf(sb, "%s%s", VSTR(lv)->items, VSTR(rv)->items);
 		return str;
 	} else if (lk == VAL_LIST && rk == VAL_LIST && op == AST_OP_ADD) {
 		Val list = eval_new_heap_val(ctx, VAL_LIST);
@@ -267,7 +269,7 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 		if (!val) return VNONE;
 		return *val;
 	} else if (lk == VAL_LIST && rk == VAL_INT && op == AST_OP_ARR) {
-		if (rv.as.vint < 0 || rv.as.vint > VLIST(lv)->count) {
+		if (rv.as.vint < 0 || rv.as.vint >= VLIST(lv)->count) {
 			char err[512];
 			sprintf(err, "index %lli is not in the range 0..%zu", rv.as.vint, VLIST(lv)->count);
 			eval_error(ctx, n->loc, err);
@@ -340,7 +342,6 @@ Val eval_unop(EvalCtx *ctx, AST *n) {
 	}
 }
 
-
 Val eval(EvalCtx *ctx, AST *n) {
 	if (ctx->err_ctx.got_err)
 		return VNONE;
@@ -359,6 +360,12 @@ Val eval(EvalCtx *ctx, AST *n) {
 					ctx->state == EVAL_CTX_CONT ||
 					ctx->state == EVAL_CTX_BREAK) {
 					ctx->stack.count = stack_size;
+					if (ctx->state == EVAL_CTX_RET) {
+						eval_stack_add(ctx, (EvalSymbol){
+							.kind = EVAL_SYMB_TEMP,
+							.as.temp.val = res,
+						});
+					}
 					return res;
 				}
 			}
@@ -462,35 +469,26 @@ Val eval(EvalCtx *ctx, AST *n) {
 					if (ctx->err_ctx.got_err) return VNONE;
 
 					if (lhs->kind == AST_BIN_EXPR && lhs->as.bin_expr.op == AST_OP_ARR) {
-						char *var_id = lhs->as.bin_expr.lhs->as.var;
-						EvalSymbol *es = eval_stack_get(ctx, var_id);
-						if (!es) {
-							eval_error(ctx, n->loc, "no such symbol");
-							return VNONE;
-						} else if (es->kind != EVAL_SYMB_VAR) {
-							eval_error(ctx, n->loc, "no such variable");
-							return VNONE;
-						}
-
+						Val container = eval(ctx, lhs->as.bin_expr.lhs);
 						Val key = eval(ctx, lhs->as.bin_expr.rhs);
 						if (ctx->err_ctx.got_err) return VNONE;
 
-						if (es->as.var.val.kind == VAL_LIST) {
-							if (key.as.vint < 0 || key.as.vint > VLIST(es->as.var.val)->count) {
+						if (container.kind == VAL_LIST) {
+							if (key.as.vint < 0 || key.as.vint > VLIST(container)->count) {
 								char err[512];
 								sprintf(err,
 									"index %lli is not in the range 0..%zu",
-									key.as.vint, VLIST(es->as.var.val)->count);
+									key.as.vint, VLIST(container)->count);
 								eval_error(ctx, n->as.bin_expr.lhs->loc, err);
 								return VNONE;
 							}
 
-							Val *list_val = &da_get(VLIST(es->as.var.val), key.as.vint);
+							Val *list_val = &da_get(VLIST(container), key.as.vint);
 							eval_val_mut(ctx, n->loc, n->as.bin_expr.op, list_val, rhs_val);
 							if (ctx->err_ctx.got_err) return VNONE;
-						} else if (es->as.var.val.kind == VAL_DICT) {
-							Val *dict_val = ValDict_get(VDICT(es->as.var.val), key);
-							if (!dict_val) ValDict_add(VDICT(es->as.var.val), key, rhs_val);
+						} else if (container.kind == VAL_DICT) {
+							Val *dict_val = ValDict_get(VDICT(container), key);
+							if (!dict_val) ValDict_add(VDICT(container), key, rhs_val);
 							else eval_val_mut(ctx, n->loc, n->as.bin_expr.op, dict_val, rhs_val);
 						}
 					} else if (lhs->kind == AST_VAR) {
@@ -639,7 +637,6 @@ Val eval(EvalCtx *ctx, AST *n) {
 			}
 
 			if (func->kind == EVAL_SYMB_FUNC) {
-				size_t stack_size = ctx->stack.count;
 				AST *func_def = func->as.func.node;
 				bool found_any = false;
 				Val va_args = {0};
@@ -698,7 +695,8 @@ Val eval(EvalCtx *ctx, AST *n) {
 				if (ctx->err_ctx.got_err) return VNONE;
 
 				ctx->state = EVAL_CTX_NONE;
-				ctx->stack.count = stack_size;
+				if (found_any) ctx->stack.count--;
+				ctx->stack.count -= args_cnt;
 			} else if (func->kind == EVAL_SYMB_REG_FUNC) {
 				Vals args = {0};
 				da_foreach (AST*, it, &n->as.func_call.args) {
@@ -707,7 +705,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 					if (ctx->err_ctx.got_err) return VNONE;
 				}
 
-				ErrorCtx ec = { .errf = ctx->err_ctx.errf };
+				ErrorCtx ec = {.errf = ctx->err_ctx.errf};
 				res = func->as.reg_func(ctx, n->loc, args);
 				if (ec.got_err) ctx->err_ctx.got_err = true;
 			} else eval_error(ctx, n->loc, "no such function");
@@ -766,7 +764,6 @@ GC_Object *eval_gc_alloc(EvalCtx *ctx, int val_kind) {
 
 		default: assert(0);
 	}
-
 
 	if (ctx->gc.threshold == 0)
 		ctx->gc.threshold = GC_INIT_THRESHOLD;
@@ -877,8 +874,7 @@ void eval_collect_garbage(EvalCtx *ctx) {
 		}
 	}
 
-	arena_free(&ctx->gc.from);
-
+	arena_reset(&ctx->gc.from);
 	Arena temp = ctx->gc.from;
 	ctx->gc.from = ctx->gc.to;
 	ctx->gc.to = temp;

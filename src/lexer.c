@@ -167,8 +167,9 @@ Token lexer_next(Lexer *l) {
 
 		case '/': {
 			if (l->cur_char[1] == '/') {
-				while (l->cur_char[1] != '\n')
+				while (*l->cur_char != '\n')
 					l->cur_char++;
+				return lexer_next(l);
 			} else if (l->cur_char[1] == '=') {
 				ret = token(l, TOK_SLASH_EQ, "/=");
 				l->cur_char++;

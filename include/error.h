@@ -12,7 +12,7 @@ typedef struct {
 	char *line_char;
 } Location;
 
-typedef enum : uint8_t {
+typedef enum {
 	ERROR_COMPTIME,
 	ERROR_RUNTIME,
 } ErrorKind;

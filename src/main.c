@@ -5,14 +5,14 @@
 #include "../include/api.h"
 #include "../3dparty/cplus.h"
 
-EpslVal Exit(EpslEvalCtx *ctx, EpslLocation call_loc, EpslVals args) {
+EpslVal Exit(EpslEvalCtx *ctx, EpslLocation cloc, EpslVals args) {
 	if (args.count != 1) {
-		epsl_throw_error(ctx, call_loc, "exit() accepts only 1 argument");
+		epsl_throw_error(ctx, cloc, "exit() accepts only 1 argument");
 		return EPSL_VNONE;
 	}
 
 	if (args.items[0].kind != EPSL_VAL_INT) {
-		epsl_throw_error(ctx, call_loc, "exit() accepts only integer");
+		epsl_throw_error(ctx, cloc, "exit() accepts only integer");
 		return EPSL_VNONE;
 	}
 
@@ -20,16 +20,16 @@ EpslVal Exit(EpslEvalCtx *ctx, EpslLocation call_loc, EpslVals args) {
 	return EPSL_VNONE;
 }
 
-EpslVal System(EpslEvalCtx *ctx, EpslLocation call_loc, EpslVals args) {
+EpslVal System(EpslEvalCtx *ctx, EpslLocation cloc, EpslVals args) {
 	if (args.count == 0) {
-		epsl_throw_error(ctx, call_loc, "arguments were not provided");
+		epsl_throw_error(ctx, cloc, "arguments were not provided");
 		return EPSL_VNONE;
 	}
 
 	StringBuilder str = {0};
 	for (size_t i = 0; i < args.count; i++) {
 		if (args.items[i].kind != EPSL_VAL_STR) {
-			epsl_throw_error(ctx, call_loc, "system() accepts only strings");
+			epsl_throw_error(ctx, cloc, "system() accepts only strings");
 			return EPSL_VNONE;
 		}
 
@@ -79,7 +79,7 @@ void print_error(EpslLocation loc, EpslErrorKind ek, char *msg) {
 
 void print_usage() {
 	printf(
-		"Usage: [options] file\n"
+		"Usage: [options] file [script args]\n"
 		"Options:\n"
 		"  -c     Program passed in as string\n"
 		"  -ast   Print abstract syntax tree\n"
@@ -100,7 +100,7 @@ void reg_platform(EpslCtx *ctx) {
 	platform = "NONE";
 #endif
 
-	epsl_val_set_str(ctx, str, platform);
+	epsl_val_set_str(str, platform);
 	epsl_reg_var(ctx, "_OS_", str);
 }
 
@@ -109,6 +109,7 @@ int main(int argc, char *argv[]) {
 	bool print_toks = false;
 	bool print_ast  = false;
 	bool cmd        = false;
+	DA(char*) script_args = {0};
 
 	if (argc == 1) {
 		print_usage();
@@ -116,6 +117,11 @@ int main(int argc, char *argv[]) {
 	}
 
 	for (size_t i = 1; i < argc; i++) {
+		if (input_file) {
+			da_append(&script_args, argv[i]);
+			continue;
+		}
+
 		if (strcmp(argv[i], "-tok") == 0) {
 			print_toks = true;
 		} else if (strcmp(argv[i], "-ast") == 0) {
@@ -154,7 +160,15 @@ int main(int argc, char *argv[]) {
 		ctx = epsl_from_str(print_error, input_file);
 	}
 
+	EpslVal os_args = epsl_new_heap_val(ctx, EPSL_VAL_LIST);
+	da_foreach(char*, arg, &script_args) {
+		EpslVal os_arg = epsl_new_heap_val(ctx, EPSL_VAL_STR);
+		epsl_val_set_str(os_arg, *arg);
+		epsl_val_list_append(os_args, os_arg);
+	}
+
 	reg_platform(ctx);
+	epsl_reg_var(ctx, "_OS_ARGS_", os_args);
 	epsl_reg_func(ctx, "exit", Exit);
 	epsl_reg_func(ctx, "system", System);
 

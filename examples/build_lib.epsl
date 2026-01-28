@@ -2,7 +2,7 @@ build_debug_mode := false;
 import "examples/build.epsl";
 
 build_folder := path("build", "epsilang");
-output_file := path(build_folder, "lib", "libepsl") + SO();
+output_file := path(build_folder, "lib", "libepsl");
 
 srcs := [
 	path("src", "api.c"),
@@ -27,6 +27,33 @@ cmd(
 	"-shared",
 	"-std=c99",
 	"-O3",
-	"-o", output_file,
+	"-o", output_file+SO(),
 	join(srcs)
 );
+
+cmd(
+	"cc",
+	"-c",
+	"-std=c99",
+	"-O3",
+	join(srcs)
+);
+
+cmd("ar rcs", output_file+".a", "*.o");
+
+remove_file("*.o");
+
+if len(_OS_ARGS_) == 1 {
+	if _OS_ARGS_[0] == "install" {
+		if _OS_ != "LINUX" && _OS_ != "APPLE" {
+			println("Installation is supported only for Linux and MacOS for now");
+			exit(1);
+		}
+
+		copy_file(output_file+SO(), "/usr/local/lib");
+		copy_file(output_file+".a", "/usr/local/lib");
+		copy_file(epsl_api, "/usr/local/include");
+	} else {
+		println("no such option");
+	}
+}

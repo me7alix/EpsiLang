@@ -97,30 +97,25 @@ Val Int(EvalCtx *ctx, Location call_loc, Vals args) {
 }
 
 Val Float(EvalCtx *ctx, Location call_loc, Vals args) {
-	if (args.count != 1)
+	if (args.count != 1) {
 		err(ctx, call_loc, "float() accepts only 1 argument");
+	}
 
 	Val arg = args.items[0];
+	double res;
+	char *end;
+
 	switch (arg.kind) {
-		case VAL_FLOAT:
-			return arg;
-
-		case VAL_INT:
-			return (Val){
-				.kind = VAL_INT,
-				.as.vfloat = (double) arg.as.vfloat
-			};
-
-		case VAL_STR: {
-			char *end;
-			return (Val){
-				.kind = VAL_FLOAT,
-				.as.vfloat = strtod(VSTR(arg)->items, &end),
-			};
-		}
-
-		default: err(ctx, call_loc, "cannot convert to float");
+		case VAL_FLOAT: res = arg.as.vfloat;                  break;
+		case VAL_INT:   res = arg.as.vint;                    break;
+		case VAL_STR:   res = strtod(VSTR(arg)->items, &end); break;
+		default:        err(ctx, call_loc, "cannot convert to float");
 	}
+
+	return (Val){
+		.kind = VAL_FLOAT,
+		.as.vfloat = res, 
+	};
 }
 
 Val Len(EvalCtx *ctx, Location call_loc, Vals args) {

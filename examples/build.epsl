@@ -54,6 +54,15 @@ fn copy_file(src, dst) {
 	}
 }
 
+fn remove_file(file) {
+	if _OS_ == "LINUX" || _OS_ == "APPLE" {
+		cmd("rm", file);
+	} else if _OS_ == "WINDOWS" {
+		cmd("del", file);
+	}
+}
+
+
 fn SO() {
 	if      _OS_ == "LINUX"   => ".so";
 	else if _OS_ == "WINDOWS" => ".dll";

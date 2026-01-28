@@ -12,11 +12,12 @@ typedef struct {
 	char *line_char;
 } EpslLocation;
 
-typedef enum : uint8_t {
+typedef enum {
 	EPSL_ERROR_COMPTIME,
 	EPSL_ERROR_RUNTIME,
 } EpslErrorKind;
 
+typedef struct EpslEvalCtx EpslEvalCtx;
 typedef void (*EpslErrorFn)(EpslLocation loc, EpslErrorKind ek, char *msg);
 
 typedef struct {
@@ -42,7 +43,7 @@ typedef struct {
 } EpslString;
 
 struct EpslVal  {
-	enum : uint8_t {
+	enum {
 		EPSL_VAL_NONE,
 		EPSL_VAL_INT,
 		EPSL_VAL_FLOAT,
@@ -65,12 +66,11 @@ typedef struct {
 	bool got_err;
 } EpslResult;
 
-typedef struct EpslEvalCtx EpslEvalCtx;
 typedef EpslVal (*EpslRegFunc)(EpslEvalCtx *ctx, EpslLocation call_loc, EpslVals args);
 
 #define EPSL_VNONE ((EpslVal){0})
 
-EpslVal epsl_new_heap_val(EpslCtx *ctx, uint8_t kind);
+EpslVal epsl_new_heap_val(EpslCtx *ctx, int kind);
 EpslCtx *epsl_from_str(EpslErrorFn errf, char *code);
 EpslCtx *epsl_from_file(EpslErrorFn errf, char *filename);
 EpslResult epsl_eval(EpslCtx *ctx);
@@ -82,9 +82,9 @@ void epsl_reg_var(EpslCtx *ctx, const char *id, EpslVal val);
 void epsl_reg_func(EpslCtx *ctx, const char *name, EpslRegFunc rf);
 
 EpslString *epsl_val_get_str(EpslVal val);
-void epsl_val_set_str(EpslCtx *ctx, EpslVal val, char *str);
-void epsl_list_append(EpslVals *list, EpslVal v);
+void epsl_val_set_str(EpslVal val, char *str);
+void epsl_val_list_append(EpslVal list, EpslVal v);
 
-void epsl_throw_error(EpslCtx *ctx, EpslLocation loc, char *msg);
+void epsl_throw_error(EpslEvalCtx *ctx, EpslLocation loc, char *msg);
 
 #endif

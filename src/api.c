@@ -30,13 +30,6 @@ EpslCtx *epsl_from_str(EpslErrorFn errf, char *code) {
 	return ctx;
 }
 
-void epsl_throw_error(EpslCtx *ctx, EpslLocation loc, char *msg) {
-	EpslCtxR *r = ctx;
-	r->eval_ctx.err_ctx.got_err = true;
-	Location rloc; COPY(&rloc, &loc);
-	r->eval_ctx.err_ctx.errf(rloc, ERROR_RUNTIME, msg);
-}
-
 EpslCtx *epsl_from_file(EpslErrorFn errf, char *filename) {
 	Lexer lex = lexer_from_file(filename);
 	if (!lex.cur_char) return NULL;
@@ -55,6 +48,13 @@ EpslCtx *epsl_from_file(EpslErrorFn errf, char *filename) {
 
 	reg_stdlib(&ctx->eval_ctx);
 	return ctx;
+}
+
+void epsl_throw_error(EpslEvalCtx *ctx, EpslLocation loc, char *msg) {
+	EvalCtx *r = (EvalCtx*) ctx;
+	Location rloc; COPY(&rloc, &loc);
+	r->err_ctx.got_err = true;
+	r->err_ctx.errf(rloc, ERROR_RUNTIME, msg);
 }
 
 void epsl_reg_func(EpslCtx *ctx, const char *id, EpslRegFunc rf) {
@@ -96,7 +96,7 @@ void epsl_print_tokens(EpslCtx *ctx) {
 	lexer_print(r->parser.lexer);
 }
 
-EpslVal epsl_new_heap_val(EpslCtx *ctx, uint8_t kind) {
+EpslVal epsl_new_heap_val(EpslCtx *ctx, int kind) {
 	EpslCtxR *r = ctx;
 	Val val = eval_new_heap_val(&r->eval_ctx, kind);
 	EpslVal ev; COPY(&ev, &val);
@@ -108,13 +108,16 @@ EpslString *epsl_val_get_str(EpslVal val) {
 	return (EpslString*)VSTR(v);
 }
 
-void epsl_val_set_str(EpslCtx *ctx, EpslVal val, char *str) {
+void epsl_val_set_str(EpslVal val, char *str) {
 	Val v; COPY(&v, &val);
 	StringBuilder *sb = VSTR(v);
 	sb_reset(sb);
 	sb_appendf(sb, "%s", str);
 }
 
-void epsl_list_append(EpslVals *list, EpslVal v) {
-	da_append(list, v);
+void epsl_val_list_append(EpslVal list, EpslVal v) {
+	Val rlist, rv;
+	COPY(&rlist, &list);
+	COPY(&rv, &v);
+	da_append(VLIST(rlist), rv);
 }

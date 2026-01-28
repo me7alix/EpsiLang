@@ -87,6 +87,7 @@ void ast_print(AST *n, int spaces) {
 		case AST_BIN_EXPR: {
 			int bop = n->as.bin_expr.op;
 			printf("bin_expr(%s):\n",
+				bop == AST_OP_ARR    ? "[]" :
 				bop == AST_OP_EQ     ? "="  :
 				bop == AST_OP_IS_EQ  ? "==" :
 				bop == AST_OP_NOT_EQ ? "!=" :
