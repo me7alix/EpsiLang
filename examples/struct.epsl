@@ -1,0 +1,14 @@
+person := {
+	.name: "Michael",
+	.salary: 78561,
+	.address: {
+		.city: "Moscow",
+		.postcode: 832103,
+	},
+};
+
+println("Name: ", person.name);
+println("Salary: ", person.salary);
+println("Address: ");
+println("  City: ", person.address.city);
+println("  Postcode: ", person.address.postcode);

@@ -87,16 +87,18 @@ void ast_print(AST *n, int spaces) {
 		case AST_BIN_EXPR: {
 			int bop = n->as.bin_expr.op;
 			printf("bin_expr(%s):\n",
-				bop == AST_OP_ARR    ? "[]" :
-				bop == AST_OP_EQ     ? "="  :
-				bop == AST_OP_IS_EQ  ? "==" :
-				bop == AST_OP_NOT_EQ ? "!=" :
-				bop == AST_OP_AND    ? "&&" :
-				bop == AST_OP_OR     ? "||" :
-				bop == AST_OP_ADD    ? "+"  :
-				bop == AST_OP_SUB    ? "-"  :
-				bop == AST_OP_MUL    ? "*"  :
-				bop == AST_OP_DIV    ? "/"  : "E");
+				bop == AST_OP_GET_FIELD ? "."  :
+				bop == AST_OP_PAIR      ? ":"  :
+				bop == AST_OP_ARR       ? "[]" :
+				bop == AST_OP_EQ        ? "="  :
+				bop == AST_OP_IS_EQ     ? "==" :
+				bop == AST_OP_NOT_EQ    ? "!=" :
+				bop == AST_OP_AND       ? "&&" :
+				bop == AST_OP_OR        ? "||" :
+				bop == AST_OP_ADD       ? "+"  :
+				bop == AST_OP_SUB       ? "-"  :
+				bop == AST_OP_MUL       ? "*"  :
+				bop == AST_OP_DIV       ? "/"  : "E");
 			ast_print(n->as.bin_expr.lhs, spaces + gap);
 			ast_print(n->as.bin_expr.rhs, spaces + gap);
 		} break;
@@ -104,6 +106,7 @@ void ast_print(AST *n, int spaces) {
 		case AST_UN_EXPR: {
 			int op = n->as.un_expr.op;
 			printf("un_expr(%s):\n",
+				op == AST_OP_FIELD  ? "."  :
 				op == AST_OP_NOT    ? "!"  :
 				op == AST_OP_NEG    ? "-"  : "E");
 			ast_print(n->as.un_expr.v, spaces + gap);

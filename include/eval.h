@@ -31,6 +31,7 @@ struct Val {
 		VAL_INT,
 		VAL_FLOAT,
 		VAL_BOOL,
+		VAL_FIELD,
 		VAL_STR,
 		VAL_LIST,
 		VAL_DICT,
@@ -40,6 +41,7 @@ struct Val {
 		long long vint;
 		double vfloat;
 		bool vbool;
+		char *field;
 		GC_Object *gc_obj;
 	} as;
 };

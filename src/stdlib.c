@@ -18,6 +18,7 @@ void val_sprint_f(Val v, char *buf, int depth) {
 		case VAL_INT:   sprintf(buf, "%lli", v.as.vint);      break;
 		case VAL_FLOAT: sprintf(buf, "%lf", v.as.vfloat);     break;
 		case VAL_BOOL:  sprintf(buf, "%s", bstr(v.as.vbool)); break;
+		case VAL_FIELD: sprintf(buf, ".%s", v.as.field);      break;
 
 		case VAL_STR:
 			if (depth == 0)

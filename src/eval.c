@@ -55,6 +55,7 @@ u64 ValDict_hashf(Val key) {
 		case VAL_INT:   return hash_num(key.as.vint);
 		case VAL_FLOAT: return hash_num(key.as.vint);
 		case VAL_BOOL:  return hash_num(key.as.vbool);
+		case VAL_FIELD: return hash_str(key.as.field);
 		case VAL_STR:   return hash_str(VSTR(key)->items);
 
 		case VAL_LIST: {
@@ -86,6 +87,7 @@ int ValDict_compare(Val a, Val b) {
 		case VAL_INT:   return a.as.vint != b.as.vint;
 		case VAL_FLOAT: return a.as.vfloat != b.as.vfloat;
 		case VAL_BOOL:  return a.as.vbool != b.as.vbool;
+		case VAL_FIELD: return strcmp(a.as.field, b.as.field);
 		case VAL_STR:   return strcmp(VSTR(a)->items, VSTR(b)->items);
 
 		case VAL_LIST: {
@@ -201,11 +203,33 @@ int prec_to_val_kind(int pr) {
 	}
 }
 
+Val eval_var_to_field(EvalCtx *ctx, AST *var) {
+	if (var->kind != AST_VAR) {
+		eval_error(ctx, var->loc, "field expected");
+		return VNONE;
+	}
+
+	return (Val){
+		.kind = VAL_FIELD,
+		.as.field = var->as.var,
+	};
+}
+
 Val eval_binop(EvalCtx *ctx, AST *n) {
 	AST_Op op = n->as.bin_expr.op;
 	Val lv = eval(ctx, n->as.bin_expr.lhs);
 	if (ctx->err_ctx.got_err) return VNONE;
-	Val rv = eval(ctx, n->as.bin_expr.rhs);
+
+	AST *rhs = n->as.bin_expr.rhs;
+	if (lv.kind == VAL_DICT && op == AST_OP_GET_FIELD) {
+		Val rv = eval_var_to_field(ctx, n->as.bin_expr.rhs);
+		if (ctx->err_ctx.got_err) return VNONE;
+		Val *val = ValDict_get(VDICT(lv), rv);
+		if (!val) return VNONE;
+		return *val;
+	}
+
+	Val rv = eval(ctx, rhs);
 	if (ctx->err_ctx.got_err) return VNONE;
 	int lk = lv.kind, rk = rv.kind;
 
@@ -313,7 +337,19 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 }
 
 Val eval_unop(EvalCtx *ctx, AST *n) {
-	AST_Op op = n->as.bin_expr.op;
+	AST_Op op = n->as.un_expr.op;
+	if (op == AST_OP_FIELD) {
+		if (n->as.un_expr.v->kind != AST_VAR) {
+			eval_error(ctx, n->as.un_expr.v->loc, "identifier expected");
+			return VNONE;
+		}
+
+		return (Val){
+			.kind = VAL_FIELD,
+			.as.field = n->as.un_expr.v->as.var,
+		};
+	}
+
 	Val v = eval(ctx, n->as.un_expr.v);
 	if (ctx->err_ctx.got_err) return VNONE;
 
@@ -468,7 +504,16 @@ Val eval(EvalCtx *ctx, AST *n) {
 					Val rhs_val = eval(ctx, rhs);
 					if (ctx->err_ctx.got_err) return VNONE;
 
-					if (lhs->kind == AST_BIN_EXPR && lhs->as.bin_expr.op == AST_OP_ARR) {
+					if (lhs->kind == AST_BIN_EXPR && lhs->as.bin_expr.op == AST_OP_GET_FIELD) {
+						Val container = eval(ctx, lhs->as.bin_expr.lhs);
+						if (ctx->err_ctx.got_err) return VNONE;
+						Val key = eval_var_to_field(ctx, lhs->as.bin_expr.rhs);
+						if (ctx->err_ctx.got_err) return VNONE;
+
+						Val *dict_val = ValDict_get(VDICT(container), key);
+						if (!dict_val) ValDict_add(VDICT(container), key, rhs_val);
+						else eval_val_mut(ctx, n->loc, n->as.bin_expr.op, dict_val, rhs_val);
+					} else if (lhs->kind == AST_BIN_EXPR && lhs->as.bin_expr.op == AST_OP_ARR) {
 						Val container = eval(ctx, lhs->as.bin_expr.lhs);
 						Val key = eval(ctx, lhs->as.bin_expr.rhs);
 						if (ctx->err_ctx.got_err) return VNONE;

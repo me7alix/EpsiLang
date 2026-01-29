@@ -29,6 +29,8 @@ typedef enum {
 	AST_OP_PAIR,
 	AST_OP_NOT,
 	AST_OP_NEG,
+	AST_OP_FIELD,
+	AST_OP_GET_FIELD,
 } AST_Op;
 
 typedef struct {

@@ -48,6 +48,7 @@ struct EpslVal  {
 		EPSL_VAL_INT,
 		EPSL_VAL_FLOAT,
 		EPSL_VAL_BOOL,
+		EPSL_VAL_FIELD,
 		EPSL_VAL_STR,
 		EPSL_VAL_LIST,
 		EPSL_VAL_DICT,
@@ -57,6 +58,7 @@ struct EpslVal  {
 		long long vint;
 		double vfloat;
 		bool vbool;
+		char *field;
 		void *gc_obj;
 	} as;
 };

@@ -64,10 +64,13 @@ uint ast_op_precedence(AST_Op op, bool l) {
 		case AST_OP_DIV:
 			return l ? 80 : 81;
 		case AST_OP_ARR:
-			return l ? 100 : 101;
+			return l ? 120 : 121;
+		case AST_OP_FIELD:
 		case AST_OP_NOT:
 		case AST_OP_NEG:
 			return l ? 0 : 111;
+		case AST_OP_GET_FIELD:
+			return l ? 110 : 111;
 		default: return 0;
 	}
 }
@@ -577,7 +580,9 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 				}));
 			} break;
 
+			case TOK_DOT:
 			case TOK_MINUS: {
+				int op = peek(p).kind;
 				bool is_unary_op = false;
 				if (nodes.count == 0) {
 					is_unary_op = true;
@@ -596,13 +601,17 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 					da_append(&nodes, ast_alloc((AST){
 						.kind = AST_BIN_EXPR,
 						.loc = peek(p).loc,
-						.as.bin_expr.op = AST_OP_SUB,
+						.as.bin_expr.op =
+							op == TOK_DOT   ? AST_OP_GET_FIELD : 
+							op == TOK_MINUS ? AST_OP_SUB : 0,
 					}));
 				} else {
 					da_append(&nodes, ast_alloc((AST){
 						.kind = AST_UN_EXPR,
 						.loc = peek(p).loc,
-						.as.un_expr.op = AST_OP_NEG,
+						.as.un_expr.op =
+							op == TOK_DOT   ? AST_OP_FIELD : 
+							op == TOK_MINUS ? AST_OP_NEG : 0,
 					}));
 				}
 			} break;
