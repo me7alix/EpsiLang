@@ -698,16 +698,26 @@ Val eval(EvalCtx *ctx, AST *n) {
 				if (found_any) ctx->stack.count--;
 				ctx->stack.count -= args_cnt;
 			} else if (func->kind == EVAL_SYMB_REG_FUNC) {
-				Vals args = {0};
-				da_foreach (AST*, it, &n->as.func_call.args) {
-					Val res = eval(ctx, *it);
-					da_append(&args, res);
-					if (ctx->err_ctx.got_err) return VNONE;
+				const int max_reg_func_args = 256;
+				if (n->as.func_call.args.count > max_reg_func_args) {
+					eval_error(ctx, n->loc, "too many arguments");
+					return VNONE;
 				}
 
-				ErrorCtx ec = {.errf = ctx->err_ctx.errf};
-				res = func->as.reg_func(ctx, n->loc, args);
-				if (ec.got_err) ctx->err_ctx.got_err = true;
+				Vals temp_buf[max_reg_func_args];
+				Vals reg_func_args = {
+					.items = (Val*)temp_buf,
+					.capacity = max_reg_func_args,
+				};
+
+				da_foreach (AST*, it, &n->as.func_call.args) {
+					Val res = eval(ctx, *it);
+					if (ctx->err_ctx.got_err) return VNONE;
+					da_append(&reg_func_args, res);
+				}
+
+				res = func->as.reg_func(ctx, n->loc, reg_func_args);
+				if (ctx->err_ctx.got_err) return VNONE;
 			} else eval_error(ctx, n->loc, "no such function");
 
 			return res;
@@ -739,25 +749,38 @@ Val eval(EvalCtx *ctx, AST *n) {
 	return VNONE;
 }
 
+DA(GC_Object*) freed_objs = {0};
+
 GC_Object *eval_gc_alloc(EvalCtx *ctx, int val_kind) {
-	GC_Object *gco = malloc(sizeof(*gco));
-	*gco = (GC_Object){.val_kind = val_kind};
+	GC_Object *gco;
+	if (freed_objs.count > 0) {
+		gco = da_last(&freed_objs);
+		da_remove_last(&freed_objs);
+		gco->val_kind = val_kind;
+	} else {
+		gco = malloc(sizeof(*gco));
+		*gco = (GC_Object){
+			.val_kind = val_kind,
+			.data = malloc(sizeof(union{
+				Vals vals;
+				ValDict dict;
+				StringBuilder str;
+			})),
+		};
+	}
 
 	switch (val_kind) {
 		case VAL_LIST: {
-			gco->data = malloc(sizeof(Vals));
 			*((Vals*)gco->data) = (Vals){0};
 			da_set_arena((Vals*)gco->data, &ctx->gc.from);
 		} break;
 
 		case VAL_DICT: {
-			gco->data = malloc(sizeof(ValDict));
 			*((ValDict*)gco->data) = (ValDict){0};
 			ht_set_arena((ValDict*)gco->data, &ctx->gc.from);
 		} break;
 
 		case VAL_STR: {
-			gco->data = malloc(sizeof(StringBuilder));
 			*((StringBuilder*)gco->data) = (StringBuilder){0};
 			sb_set_arena((StringBuilder*)gco->data, &ctx->gc.from);
 		} break;
@@ -867,8 +890,7 @@ void eval_collect_garbage(EvalCtx *ctx) {
 	for (size_t i = 0; i < ctx->gc.objs.count; i++) {
 		GC_Object *obj = da_get(&ctx->gc.objs, i);
 		if (!obj->marked) {
-			free(obj->data);
-			free(obj);
+			da_append(&freed_objs, obj);
 			da_remove_unordered(&ctx->gc.objs, i);
 			i--;
 		}

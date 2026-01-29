@@ -109,6 +109,7 @@ struct Arena {
 
 static void *arena_alloc(Arena *a, size_t size) {
     size = CP_ALIGN_UP(size, sizeof(void*));
+
     if (!a->first) {
         size_t cap = MAX(CP_ARENA_INIT_CAP, size);
         ArenaBlock *b = (ArenaBlock *)CP_MALLOC(sizeof(ArenaBlock) + cap);
@@ -118,64 +119,45 @@ static void *arena_alloc(Arena *a, size_t size) {
         b->count = 0;
         a->first = a->last = b;
     }
-    ArenaBlock *b = a->last;
-    if (b->count + size > b->capacity) {
-        size_t new_cap = MAX(b->capacity * 2, size);
-        ArenaBlock *newb = (ArenaBlock *)CP_MALLOC(sizeof(ArenaBlock) + new_cap);
-        CP_ASSERT(newb);
-        newb->next = NULL;
-        newb->capacity = new_cap;
-        newb->count = 0;
-        a->last->next = newb;
-        a->last = newb;
-        b = newb;
-    }
-    void *p = b->data + b->count;
-    b->count += size;
-    a->last_ptr = p;
-    a->last_sz = size;
-    return p;
-}
 
-static void *arena_realloc(Arena *a, void *oldptr, size_t oldsz, size_t newsz) {
-    if (newsz <= oldsz) return oldptr;
-    if (oldptr == a->last_ptr) {
-        ArenaBlock *b = a->last;
-        size_t extra = newsz - oldsz;
-        if (b->count + extra <= b->capacity) {
-            b->count += extra;
-            a->last_sz = newsz;
-            return oldptr;
+    ArenaBlock *b = a->last;
+
+    while (b->count + size > b->capacity) {
+        if (b->next) {
+            b = b->next;
         } else {
-            size_t new_cap = MAX(b->capacity * 2, newsz);
+            size_t new_cap = MAX(b->capacity * 2, size);
             ArenaBlock *newb = (ArenaBlock *)CP_MALLOC(sizeof(ArenaBlock) + new_cap);
             CP_ASSERT(newb);
             newb->next = NULL;
             newb->capacity = new_cap;
-            newb->count = newsz;
-            CP_MEMMOVE(newb->data, oldptr, oldsz);
-            a->last->next = newb;
-            a->last = newb;
-            b->count -= oldsz;
-            a->last_ptr = newb->data;
-            a->last_sz = newsz;
-            return a->last_ptr;
+            newb->count = 0;
+            b->next = newb;
+            b = newb;
         }
     }
-    void *newptr = arena_alloc(a, newsz);
-    CP_MEMMOVE(newptr, oldptr, oldsz);
-    return newptr;
+
+    void *p = b->data + b->count;
+    b->count += size;
+
+    a->last = b;
+    a->last_ptr = p;
+    a->last_sz = size;
+
+    return p;
 }
 
-static void *arena_memdup(Arena *arena, void *p, size_t size) {
-    void *duped_mem = arena_alloc(arena, size);
-    CP_MEMMOVE(duped_mem, p, size);
-    return duped_mem;
-}
-
-static char *arena_strdup(Arena *arena, char *str) {
-    return (char *) arena_memdup(arena, str, CP_STRLEN(str) + 1);
-}
+#define arena_reset(ar) \
+    do { \
+        if ((ar)->first) { \
+            for (ArenaBlock *b = (ar)->first; b; b = b->next) { \
+                b->count = 0; \
+            } \
+            (ar)->last = (ar)->first; \
+            (ar)->last_ptr = NULL; \
+            (ar)->last_sz = 0; \
+        } \
+    } while (0)
 
 #define arena_free(ar) \
     do { \
@@ -190,15 +172,22 @@ static char *arena_strdup(Arena *arena, char *str) {
         (ar)->last_sz = 0; \
     } while (0)
 
-#define arena_reset(ar) \
-    do { \
-        for (ArenaBlock *b = (ar)->first; b; b = b->next) { \
-            b->count = 0; \
-        } \
-        (ar)->last = (ar)->first; \
-        (ar)->last_ptr = NULL; \
-        (ar)->last_sz = 0; \
-    } while (0)
+static void *arena_realloc(Arena *a, void *oldptr, size_t oldsz, size_t newsz) {
+    if (newsz <= oldsz) return oldptr;
+    void *newptr = arena_alloc(a, newsz);
+    CP_MEMMOVE(newptr, oldptr, oldsz);
+    return newptr;
+}
+
+static void *arena_memdup(Arena *arena, void *p, size_t size) {
+    void *duped_mem = arena_alloc(arena, size);
+    CP_MEMMOVE(duped_mem, p, size);
+    return duped_mem;
+}
+
+static char *arena_strdup(Arena *arena, char *str) {
+    return (char *)arena_memdup(arena, str, CP_STRLEN(str) + 1);
+}
 
 /* Dynamic array */
 
