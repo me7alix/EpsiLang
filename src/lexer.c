@@ -104,6 +104,7 @@ struct {
 	{ "return",   TOK_RET       },
 	{ "import",   TOK_IMPORT    },
 	{ "fn",       TOK_FUNC      },
+	{ "in",       TOK_IN        },
 	{ "none",     TOK_NONE      },
 };
 

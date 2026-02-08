@@ -295,7 +295,7 @@ AST *parse_for_stmt(Parser *p) {
 	expect(p, TOK_ID);
 	if (p->err_ctx.got_err) return NULL;
 
-	if (peek2(p).kind != TOK_ID && strcmp(peek2(p).data, "in") != 0) {
+	if (peek2(p).kind != TOK_IN) {
 		for_st->kind = AST_ST_FOR;
 		if (peek2(p).kind == TOK_ASSIGN)
 			for_st->as.st_for.var = parse_var_def_assign(p);
