@@ -54,6 +54,18 @@ typedef struct {
 	ErrorCtx err_ctx;
 } Parser;
 
+typedef struct {
+	char *str;
+	u64 hash;
+} HashStr;
+
+static HashStr HS(char *str) {
+	return (HashStr){
+		.str = str,
+		.hash = hash_str(str),
+	};
+}
+
 typedef struct AST AST;
 typedef DA(AST*) ASTs;
 struct AST {
@@ -136,7 +148,7 @@ struct AST {
 			ASTs args;
 			AST *body;
 		} func_def;
-		char *var;
+		HashStr var;
 		AST *var_mut;
 		ASTs body;
 		AST_Literal lit;

@@ -58,7 +58,10 @@ struct EpslVal  {
 		long long vint;
 		double vfloat;
 		bool vbool;
-		char *field;
+		struct {
+			char *id;
+			uint64_t hash;
+		} field;
 		void *gc_obj;
 	} as;
 };

@@ -376,7 +376,7 @@ AST *parse_func_def(Parser *p) {
 				da_append(&func_def->as.func_def.args, ast_alloc((AST){
 					.kind = AST_VAR,
 					.loc = peek(p).loc,
-					.as.var = peek(p).data,
+					.as.var = HS(peek(p).data),
 				}));
 			} break;
 
@@ -549,7 +549,7 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 					da_append(&nodes, ast_alloc((AST){
 						.kind = AST_VAR,
 						.loc = peek(p).loc,
-						.as.var = peek(p).data,
+						.as.var = HS(peek(p).data),
 					}));
 				}
 			} break;
@@ -742,10 +742,11 @@ AST *parse_body(Parser *p, bool isProg) {
 			} break;
 
 			case TOK_ID: {
-				if (peek2(p).kind == TOK_ASSIGN)
+				if (peek2(p).kind == TOK_ASSIGN) {
 					da_append(&body->as.body, parse_var_def_assign(p));
-				else
+				} else {
 					da_append(&body->as.body, parse_var_mut(p, PARSE_EXPR_STMT));
+				}
 			} break;
 
 			case TOK_FUNC: {

@@ -41,7 +41,7 @@ struct Val {
 		long long vint;
 		double vfloat;
 		bool vbool;
-		char *field;
+		HashStr field;
 		GC_Object *gc_obj;
 	} as;
 };
@@ -63,7 +63,6 @@ typedef struct {
 		EVAL_SYMB_FUNC,
 		EVAL_SYMB_REG_FUNC,
 	} kind;
-	char *id;
 
 	union {
 		struct { Val val;   } var;
@@ -73,7 +72,9 @@ typedef struct {
 	} as;
 } EvalSymbol;
 
-typedef DA(EvalSymbol) EvalStack;
+
+HT_DECL(EvalScope, HashStr, EvalSymbol)
+typedef DA(EvalScope) EvalStack;
 
 struct EvalCtx {
 	enum {
