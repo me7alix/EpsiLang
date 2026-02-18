@@ -3,6 +3,9 @@ if _OS_ != "WINDOWS" && _OS_ != "LINUX" && _OS_ != "APPLE" {
 	exit(1);
 }
 
+if build_debug_mode ->
+	println("DEBUG MODE");
+
 fn join(arr) {
 	res := "";
 	for i := 0; i < len(arr); i+=1 {
@@ -63,8 +66,12 @@ fn remove_file(file) {
 }
 
 
-fn SO() {
-	if      _OS_ == "LINUX"   => ".so";
-	else if _OS_ == "WINDOWS" => ".dll";
-	else if _OS_ == "APPLE"   => ".dylib";
+fn dynamic_lib(p) {
+	if      _OS_ == "LINUX"   => p + ".so";
+	else if _OS_ == "WINDOWS" => p + ".dll";
+	else if _OS_ == "APPLE"   => p + ".dylib";
+}
+
+fn static_lib(p) {
+	return p + ".a";
 }

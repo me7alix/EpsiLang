@@ -27,7 +27,7 @@ cmd(
 	"-shared",
 	"-std=c99",
 	"-O3",
-	"-o", output_file+SO(),
+	"-o", dynamic_lib(output_file),
 	join(srcs)
 );
 
@@ -39,7 +39,7 @@ cmd(
 	join(srcs)
 );
 
-cmd("ar rcs", output_file+".a", "*.o");
+cmd("ar rcs", static_lib(output_file), "*.o");
 
 remove_file("*.o");
 
@@ -50,8 +50,8 @@ if len(_OS_ARGS_) == 1 {
 			exit(1);
 		}
 
-		copy_file(output_file+SO(), "/usr/local/lib");
-		copy_file(output_file+".a", "/usr/local/lib");
+		copy_file(dynamic_lib(output_file), "/usr/local/lib");
+		copy_file(static_lib(output_file), "/usr/local/lib");
 		copy_file(epsl_api, "/usr/local/include");
 	} else {
 		println("no such option");
