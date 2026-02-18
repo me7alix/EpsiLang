@@ -24,6 +24,11 @@ int EvalScope_compare(HashStr a, HashStr b) {
 	return strcmp(a.str, b.str);
 }
 
+void eval_error(EvalCtx *ctx, Location loc, char *msg) {
+	ctx->err_ctx.got_err = true;
+	ctx->err_ctx.errf(loc, ERROR_RUNTIME, msg);
+}
+
 GC_Object *eval_gc_alloc(EvalCtx *ctx, int val_kind);
 
 void eval_stack_push_scope(EvalCtx *ctx) {
@@ -35,8 +40,12 @@ void eval_stack_pop_scope(EvalCtx *ctx) {
 	ctx->stack.count--;
 }
 
-void eval_stack_add(EvalCtx *ctx, HashStr key, EvalSymbol es) {
-	EvalScope_add(&da_last(&ctx->stack), key, es);
+void eval_stack_add(EvalCtx *ctx, HashStr key, EvalSymbol es, Location loc) {
+	if (EvalScope_get(&da_last(&ctx->stack), key)) {
+		eval_error(ctx, loc, "redefinition of the variable");
+	} else {
+		EvalScope_add(&da_last(&ctx->stack), key, es);
+	}
 }
 
 EvalSymbol *eval_stack_get(EvalCtx *ctx, HashStr var) {
@@ -57,14 +66,9 @@ Val eval_new_heap_val(EvalCtx *ctx, int kind) {
 	eval_stack_add(ctx, (HashStr){0}, (EvalSymbol){
 		.kind = EVAL_SYMB_TEMP,
 		.as.temp.val = hv,
-	});
+	}, (Location){0});
 
 	return hv;
-}
-
-void eval_error(EvalCtx *ctx, Location loc, char *msg) {
-	ctx->err_ctx.got_err = true;
-	ctx->err_ctx.errf(loc, ERROR_RUNTIME, msg);
 }
 
 u64 ValDict_hashf(Val key) {
@@ -400,7 +404,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 						eval_stack_add(ctx, (HashStr){0}, (EvalSymbol){
 							.kind = EVAL_SYMB_TEMP,
 							.as.temp.val = res,
-						});
+						}, (Location){0});
 					}
 					return res;
 				}
@@ -413,7 +417,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 			eval_stack_add(ctx, HS(n->as.var_def.id), (EvalSymbol){
 				.kind = EVAL_SYMB_VAR,
 				.as.var.val = eval(ctx, n->as.var_def.expr),
-			});
+			}, n->loc);
 
 			if (ctx->err_ctx.got_err)
 				return VNONE;
@@ -562,7 +566,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 			eval_stack_add(ctx, HS(n->as.func_def.id), (EvalSymbol){
 				.kind = EVAL_SYMB_FUNC,
 				.as.func.node = n,
-			});
+			}, n->loc);
 		} break;
 
 		case AST_ST_ELSE:
@@ -628,7 +632,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 				eval_stack_add(ctx, HS(var_id), (EvalSymbol){
 					.kind = EVAL_SYMB_VAR,
 					.as.var.val = x,
-				});
+				}, n->loc);
 
 				Val res = eval(ctx, n->as.st_for.body);
 				if (ctx->err_ctx.got_err) return VNONE;
@@ -717,7 +721,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 					eval_stack_add(ctx, func_def_arg->as.var, (EvalSymbol){
 						.kind = EVAL_SYMB_VAR,
 						.as.var.val = eval(ctx, func_call_arg),
-					});
+					}, func_def_arg->loc);
 
 					if (ctx->err_ctx.got_err)
 						return VNONE;
@@ -727,7 +731,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 					eval_stack_add(ctx, HS("_VA_ARGS_"), (EvalSymbol){
 						.kind = EVAL_SYMB_VAR,
 						.as.var.val = va_args,
-					});
+					}, (Location){0});
 				}
 
 				if (!found_any && args_cnt < func_def->as.func_def.args.count) {
