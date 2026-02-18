@@ -1,5 +1,4 @@
 nums := [1, 2];
-println(kind(nums));
 
 append(nums, 3, 4, 5);
 println(nums);

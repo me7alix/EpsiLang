@@ -7,6 +7,9 @@ person := {
 	},
 };
 
+println(person);
+print("\n");
+
 println("Name: ", person.name);
 println("Salary: ", person.salary);
 println("Address: ");
