@@ -1,5 +1,19 @@
-build_debug_mode := false;
+build_debug_mode := has(_OS_ARGS_, "-debug");
 import "examples/build.epsl";
+
+if len(_OS_ARGS_) > 0 {
+	if _OS_ARGS_[0] == "help" {
+		println("Options:");
+		println("  debug     Enable debug mode");
+
+		println("");
+		println("Commands:");
+		println("  (none)    Build the library");
+		println("  install   Build and install the library");
+		println("  help      Show this message");
+		exit(0);
+	}
+}
 
 build_folder := path("build", "epsilang");
 output_file := path(build_folder, "lib", "libepsl");
@@ -43,7 +57,7 @@ cmd("ar rcs", static_lib(output_file), "*.o");
 
 remove_file("*.o");
 
-if len(_OS_ARGS_) == 1 {
+if len(_OS_ARGS_) > 0 {
 	if _OS_ARGS_[0] == "install" {
 		if _OS_ != "LINUX" && _OS_ != "APPLE" {
 			println("Installation is supported only for Linux and MacOS for now");
@@ -53,7 +67,5 @@ if len(_OS_ARGS_) == 1 {
 		copy_file(dynamic_lib(output_file), "/usr/local/lib");
 		copy_file(static_lib(output_file), "/usr/local/lib");
 		copy_file(epsl_api, "/usr/local/include");
-	} else {
-		println("no such option");
 	}
 }
