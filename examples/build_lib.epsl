@@ -59,13 +59,16 @@ remove_file("*.o");
 
 if len(_OS_ARGS_) > 0 {
 	if _OS_ARGS_[0] == "install" {
-		if _OS_ != "LINUX" && _OS_ != "APPLE" {
-			println("Installation is supported only for Linux and MacOS for now");
-			exit(1);
+		if _OS_ == "LINUX" || _OS_ == "APPLE" {
+			copy_file(dynamic_lib(output_file), "/usr/local/lib");
+			copy_file(static_lib(output_file), "/usr/local/lib");
+			copy_file(epsl_api, "/usr/local/include");
+		} else {
+			if input("Do you use MSYS2 and is it located in the default path? (yes/no): ") == "yes" {
+				copy_file(dynamic_lib(output_file), "C:\\msys64\\mingw64\\bin");
+				copy_file(static_lib(output_file), "C:\\msys64\\mingw64\\lib");
+				copy_file(epsl_api, "C:\\msys64\\mingw64\\include");
+			}
 		}
-
-		copy_file(dynamic_lib(output_file), "/usr/local/lib");
-		copy_file(static_lib(output_file), "/usr/local/lib");
-		copy_file(epsl_api, "/usr/local/include");
 	}
 }
