@@ -41,7 +41,7 @@ struct Val {
 		long long vint;
 		double vfloat;
 		bool vbool;
-		HashStr field;
+		char *field;
 		GC_Object *gc_obj;
 	} as;
 };

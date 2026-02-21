@@ -77,7 +77,7 @@ u64 ValDict_hashf(Val key) {
 		case VAL_INT:   return hash_num(key.as.vint);
 		case VAL_FLOAT: return hash_num(key.as.vint);
 		case VAL_BOOL:  return hash_num(key.as.vbool);
-		case VAL_FIELD: return key.as.field.hash;
+		case VAL_FIELD: return hash_str(key.as.field);
 		case VAL_STR:   return hash_str(VSTR(key)->items);
 
 		case VAL_LIST: {
@@ -109,7 +109,7 @@ int ValDict_compare(Val a, Val b) {
 		case VAL_INT:   return a.as.vint != b.as.vint;
 		case VAL_FLOAT: return a.as.vfloat != b.as.vfloat;
 		case VAL_BOOL:  return a.as.vbool != b.as.vbool;
-		case VAL_FIELD: return strcmp(a.as.field.str, b.as.field.str);
+		case VAL_FIELD: return strcmp(a.as.field, b.as.field);
 		case VAL_STR:   return strcmp(VSTR(a)->items, VSTR(b)->items);
 
 		case VAL_LIST: {
@@ -215,7 +215,7 @@ Val eval_var_to_field(EvalCtx *ctx, AST *var) {
 
 	return (Val){
 		.kind = VAL_FIELD,
-		.as.field = var->as.var,
+		.as.field = var->as.var.str,
 	};
 }
 
@@ -350,7 +350,7 @@ Val eval_unop(EvalCtx *ctx, AST *n) {
 
 		return (Val){
 			.kind = VAL_FIELD,
-			.as.field = n->as.un_expr.v->as.var,
+			.as.field = n->as.un_expr.v->as.var.str,
 		};
 	}
 
