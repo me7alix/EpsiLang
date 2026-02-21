@@ -105,6 +105,8 @@ struct {
 	{ "import",   TOK_IMPORT    },
 	{ "fn",       TOK_FUNC      },
 	{ "in",       TOK_IN        },
+	{ "or",       TOK_OR        },
+	{ "and",      TOK_AND       },
 	{ "none",     TOK_NONE      },
 };
 
@@ -131,9 +133,6 @@ Token lexer_next(Lexer *l) {
 		case '[': ret = token(l, TOK_OSQBRA,"["); break;
 		case ']': ret = token(l, TOK_CSQBRA,"]"); break;
 		case '%': ret = token(l, TOK_PS,    "%"); break;
-		case '#': ret = token(l, TOK_MACRO, "#"); break;
-		case '^': ret = token(l, TOK_XOR,   "^"); break;
-		case '~': ret = token(l, TOK_TILDA, "~"); break;
 
 		case '.': {
 			if (l->cur_char[1] == '.' && l->cur_char[2] == '.') {
@@ -186,30 +185,9 @@ Token lexer_next(Lexer *l) {
 			}
 		} break;
 
-		case '&': {
-			if (l->cur_char[1] == '&') {
-				ret = token(l, TOK_AND, "&&");
-				l->cur_char++;
-			} else {
-				ret = token(l, TOK_AMP, "&");
-			}
-		} break;
-
-		case '|': {
-			if (l->cur_char[1] == '|') {
-				ret = token(l, TOK_OR, "||");
-				l->cur_char++;
-			} else {
-				ret = token(l, TOK_PIPE, "|");
-			}
-		} break;
-
 		case '>': {
 			if (l->cur_char[1] == '=') {
 				ret = token(l, TOK_GREAT_EQ, ">=");
-				l->cur_char++;
-			} else if (l->cur_char[1] == '>') {
-				ret = token(l, TOK_RIGHT_SHIFT, ">>");
 				l->cur_char++;
 			} else {
 				ret = token(l, TOK_GREAT, ">");
@@ -219,9 +197,6 @@ Token lexer_next(Lexer *l) {
 		case '<': {
 			if (l->cur_char[1] == '=') {
 				ret = token(l, TOK_LESS_EQ, "<=");
-				l->cur_char++;
-			} else if (l->cur_char[1] == '<') {
-				ret = token(l, TOK_LEFT_SHIFT, "<<");
 				l->cur_char++;
 			} else {
 				ret = token(l, TOK_LESS, "<");

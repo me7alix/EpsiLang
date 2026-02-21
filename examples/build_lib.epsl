@@ -59,7 +59,7 @@ remove_file("*.o");
 
 if len(_OS_ARGS_) > 0 {
 	if _OS_ARGS_[0] == "install" {
-		if _OS_ == "LINUX" || _OS_ == "APPLE" {
+		if _OS_ == "LINUX" or _OS_ == "APPLE" {
 			copy_file(dynamic_lib(output_file), "/usr/local/lib");
 			copy_file(static_lib(output_file), "/usr/local/lib");
 			copy_file(epsl_api, "/usr/local/include");
