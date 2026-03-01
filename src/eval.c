@@ -299,7 +299,6 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 			.as.vfloat = binop(ctx, n->loc, op, vget(lv), vget(rv))
 		};
 	} else if (lk == VAL_STR && op == AST_OP_ARR && rk == VAL_INT) {
-		da_reserve(VSTR(lv), VSTR(lv)->count + 4);
 		UTF8_Rune rune = utf8_get_nth(VSTR(lv)->items, rv.as.vint);
 		return (Val){.kind = VAL_RUNE, .as.vrune = rune};
 	} else if (lk == VAL_DICT && op == AST_OP_ARR) {
@@ -398,7 +397,7 @@ Val eval_unop(EvalCtx *ctx, AST *n) {
 }
 
 void check_index(EvalCtx *ctx, Location loc, long long index, size_t count) {
-	if (index < 0 || index > count) {
+	if (index < 0 || index >= count) {
 		char err[512];
 		sprintf(err,
 			"index %lli is not in the range 0..%zu",
@@ -561,7 +560,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 							eval_val_mut(ctx, n->loc, n->as.bin_expr.op, list_val, rhs_val);
 							if (ctx->err_ctx.got_err) return VNONE;
 						} else if (container.kind == VAL_STR) {
-							check_index(ctx, n->loc, key.as.vint, VLIST(container)->count);
+							check_index(ctx, n->loc, key.as.vint, utf8_len(VSTR(container)->items));
 							if (ctx->err_ctx.got_err) return VNONE;
 
 							if (rhs_val.kind != VAL_RUNE) {
@@ -569,7 +568,9 @@ Val eval(EvalCtx *ctx, AST *n) {
 								return VNONE;
 							}
 
+							da_reserve(VSTR(container), VSTR(container)->count + 4);
 							utf8_set_nth(VSTR(container)->items, key.as.vint, rhs_val.as.vrune);
+							VSTR(container)->count = strlen(VSTR(container)->items);
 						} else if (container.kind == VAL_DICT) {
 							Val *dict_val = ValDict_get(VDICT(container), key);
 							if (!dict_val) ValDict_add(VDICT(container), key, rhs_val);

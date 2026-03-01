@@ -105,37 +105,35 @@ static UTF8_Rune utf8_get_nth(char *s, size_t n) {
 	return 0;
 }
 
-// You must make sure there is enough space in the string yourself
 static int utf8_set_nth(char *s, size_t n, UTF8_Rune new_cp) {
+	size_t str_len = strlen(s) + 1;
 	size_t count = 0;
-	char *p = s;
+	char *st = s;
 
-	while (*p) {
-		size_t old_len = 0;
-		UTF8_Rune cp = utf8_decode(p, &old_len);
+	while (*s) {
+		size_t old_len;
+		UTF8_Rune cp = utf8_decode(s, &old_len);
 
 		if (cp == UTF8_INVALID)
 			return -1;
 
 		if (count == n) {
-			char new_bytes[4];
-			int new_len = utf8_encode(new_cp, new_bytes);
+			char dummy[4];
+			int new_len = utf8_encode(new_cp, dummy);
 
 			if (new_len < 0)
 				return -1;
 
-			if (new_len != old_len) {
-				size_t tail_len = strlen(p + old_len);
-				memmove(p + new_len,
-				        p + old_len,
-				        tail_len + 1);
-			}
+			memmove(s + new_len,
+			        s + old_len,
+			        str_len - (s - st) - old_len);
 
-			memcpy(p, new_bytes, new_len);
-			return 0;
+			memcpy(s, dummy, new_len);
+
+			return new_len;
 		}
 
-		p += old_len;
+		s += old_len;
 		count++;
 	}
 

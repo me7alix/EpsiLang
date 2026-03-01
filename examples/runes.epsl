@@ -2,14 +2,11 @@ str := "Привет, Мир!";
 println("Original string: ", str);
 println("Length: ", len(str));
 
-str[8] = 'п';
-append(str, '?');
-println("After changing: ", str);
+str[11] = '?';
+append(str, "?");
+println("After changing: ", str, '\n');
 
-println("");
 println("Printing runes: ", str[0], str[1], 'и', 'в');
-println("'0' + 3 = ", '0' + 3);
+println("'0' + 3 = ", '0' + 3, '\n');
 
-if str[0] == 'П' {
-	println("П is actually equal to П");
-}
+println(int(str[0]), ' ', int('П'));

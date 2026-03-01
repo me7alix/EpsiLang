@@ -6,11 +6,11 @@
 #define bstr(b) (b ? "true" : "false")
 
 #define err(ec, loc, msg) \
-do { \
-	(ec)->err_ctx.got_err = true; \
-	(ec)->err_ctx.errf(loc, ERROR_RUNTIME, msg); \
-	return VNONE; \
-} while(0)
+	do { \
+		(ec)->err_ctx.got_err = true; \
+		(ec)->err_ctx.errf(loc, ERROR_RUNTIME, msg); \
+		return VNONE; \
+	} while(0)
 
 void val_sprint_f(Val v, char *buf, int depth) {
 	switch (v.kind) {
@@ -38,7 +38,7 @@ void val_sprint_f(Val v, char *buf, int depth) {
 			sb_appendf(&sb, "[");
 
 			da_foreach (Val, it, VLIST(v)) {
-				char buf[1024]; val_sprint_f(*it, buf, depth + 1);
+				char buf[4096]; val_sprint_f(*it, buf, depth + 1);
 				sb_appendf(&sb, "%s", buf);
 				if (it - VLIST(v)->items != VLIST(v)->count - 1)
 					sb_appendf(&sb, ", ", buf);
@@ -56,7 +56,7 @@ void val_sprint_f(Val v, char *buf, int depth) {
 
 			sb_appendf(&sb, "{");
 			ht_foreach_node (ValDict, dict, kv) {
-				char buf[1024];
+				char buf[4096];
 				val_sprint_f(kv->key, buf, depth + 1);
 				sb_appendf(&sb, "%s: ", buf);
 				val_sprint_f(kv->val, buf, depth + 1);
@@ -84,6 +84,12 @@ Val Int(EvalCtx *ctx, Location call_loc, Vals args) {
 	switch (arg.kind) {
 		case VAL_INT:
 			return arg;
+
+		case VAL_RUNE:
+			return (Val){
+				.kind = VAL_INT,
+				.as.vint = (long long) arg.as.vrune
+			};
 
 		case VAL_FLOAT:
 			return (Val){
@@ -228,18 +234,9 @@ Val Append(EvalCtx *ctx, Location call_loc, Vals args) {
 	} else if (args.items[0].kind == VAL_STR) {
 		StringBuilder *str = VSTR(args.items[0]);
 		for (size_t i = 1; i < args.count; i++) {
-			switch (args.items[i].kind) {
-			case VAL_STR:
-				sb_appendf(str, "%s", VSTR(args.items[i])->items);
-				break;
-			case VAL_RUNE:
-				char out[4];
-				int n = utf8_encode(args.items[i].as.vrune, out);
-				sb_appendf(str, "%.*s", n, out);
-				break;
-			default:
-				err(ctx, call_loc, "append() accepts only strings and runes for string appending");
-			}
+			char buf[4096];
+			val_sprint_f(args.items[i], buf, 0);
+			sb_appendf(str, "%s", buf);
 		}
 	} else err(ctx, call_loc, "append() accepts only list or string");
 
