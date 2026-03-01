@@ -5,6 +5,7 @@
 #include "lexer.h"
 #include "error.h"
 #include "../3dparty/cplus.h"
+#include "../3dparty/utf8.h"
 
 typedef enum {
 	AST_OP_EQ,
@@ -39,6 +40,7 @@ typedef struct {
 		LITERAL_FLOAT,
 		LITERAL_BOOL,
 		LITERAL_STR,
+		LITERAL_RUNE,
 	} kind;
 
 	union {
@@ -46,6 +48,7 @@ typedef struct {
 		long long vint;
 		bool vbool;
 		char *vstr;
+		UTF8_Rune vrune;
 	} as;
 } AST_Literal;
 

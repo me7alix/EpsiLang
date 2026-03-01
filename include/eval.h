@@ -32,6 +32,7 @@ struct Val {
 		VAL_FLOAT,
 		VAL_BOOL,
 		VAL_FIELD,
+		VAL_RUNE,
 		VAL_STR,
 		VAL_LIST,
 		VAL_DICT,
@@ -41,6 +42,7 @@ struct Val {
 		long long vint;
 		double vfloat;
 		bool vbool;
+		UTF8_Rune vrune;
 		char *field;
 		GC_Object *gc_obj;
 	} as;

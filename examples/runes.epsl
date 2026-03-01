@@ -1,0 +1,15 @@
+str := "Привет, Мир!";
+println("Original string: ", str);
+println("Length: ", len(str));
+
+str[8] = 'п';
+append(str, '?');
+println("After changing: ", str);
+
+println("");
+println("Printing runes: ", str[0], str[1], 'и', 'в');
+println("'0' + 3 = ", '0' + 3);
+
+if str[0] == 'П' {
+	println("П is actually equal to П");
+}

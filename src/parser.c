@@ -516,6 +516,16 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 				}));
 			} break;
 
+			case TOK_CHAR: {
+				UTF8_Rune rune = utf8_get_nth(peek(p).data, 0);
+				da_append(&nodes, ast_alloc((AST){
+					.kind = AST_LIT,
+					.loc = peek(p).loc,
+					.as.lit.kind = LITERAL_RUNE,
+					.as.lit.as.vrune = rune,
+				}));
+			} break;
+
 			case TOK_NONE: {
 				da_append(&nodes, ast_alloc((AST){
 					.kind = AST_VAL_NONE,

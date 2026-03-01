@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include "../include/lexer.h"
 #include "../3dparty/cplus.h"
+#include "../3dparty/utf8.h"
 
 char *read_file(const char *filename) {
 	FILE *file = fopen(filename, "rb");
@@ -233,6 +234,38 @@ Token lexer_next(Lexer *l) {
 				l->cur_char++;
 			} else {
 				ret = token(l, TOK_COL, ":");
+			}
+		} break;
+
+		case '\'': {
+			l->cur_char++;
+			if (l->cur_char[0] == '\\') {
+				char ch;
+				l->cur_char++;
+				switch (l->cur_char[0]) {
+					case '\\': ch = '\\'; break;
+					case '0':  ch = '\0'; break;
+					case 'n':  ch = '\n'; break;
+					case 'r':  ch = '\r'; break;
+					case 't':  ch = '\t'; break;
+					case '\'': ch = '\''; break;
+					default:
+						ret = token(l, TOK_ERR, "the string contains invalid character");
+						goto exit;
+				}
+
+				char str[1]; sprintf(str, "%c", ch);
+				ret = token(l, TOK_CHAR, strdup(str));
+				l->cur_char++;
+			} else {
+				size_t bytes_read;
+				utf8_decode(l->cur_char, &bytes_read);
+				ret = token(l, TOK_CHAR, l->cur_char);
+				l->cur_char += bytes_read;
+			}
+
+			if (l->cur_char[0] != '\'') {
+				ret = token(l, TOK_ERR, "rune should be closed with '");
 			}
 		} break;
 

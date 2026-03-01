@@ -79,6 +79,7 @@ u64 ValDict_hashf(Val key) {
 		case VAL_BOOL:  return hash_num(key.as.vbool);
 		case VAL_FIELD: return hash_str(key.as.field);
 		case VAL_STR:   return hash_str(VSTR(key)->items);
+		case VAL_RUNE:  return hash_num(key.as.vrune);
 
 		case VAL_LIST: {
 			u64 hash = 0;
@@ -111,6 +112,7 @@ int ValDict_compare(Val a, Val b) {
 		case VAL_BOOL:  return a.as.vbool != b.as.vbool;
 		case VAL_FIELD: return strcmp(a.as.field, b.as.field);
 		case VAL_STR:   return strcmp(VSTR(a)->items, VSTR(b)->items);
+		case VAL_RUNE:  return a.as.vrune != b.as.vrune;
 
 		case VAL_LIST: {
 			if (VLIST(a)->count != VLIST(b)->count)
@@ -142,6 +144,7 @@ int ValDict_compare(Val a, Val b) {
 #define vget(v) ( \
 	(v).kind == VAL_INT   ? (v).as.vint   : \
 	(v).kind == VAL_FLOAT ? (v).as.vfloat : \
+	(v).kind == VAL_RUNE  ? (v).as.vrune  : \
 	(v).kind == VAL_BOOL  ? (v).as.vbool  : 0)
 
 #define binop(ctx, op_loc, op, l, r) ( \
@@ -176,6 +179,7 @@ void eval_val_mut(EvalCtx *ctx, Location op_loc, AST_Op op, Val *mut, Val to) {
 			case VAL_FLOAT: mut->as.vfloat op vget(to); break; \
 			case VAL_INT:   mut->as.vint   op vget(to); break; \
 			case VAL_BOOL:  mut->as.vbool  op vget(to); break; \
+			case VAL_RUNE:  mut->as.vrune  op vget(to); break; \
 			default: assert(0); \
 		} break
 
@@ -193,7 +197,8 @@ int val_kind_to_prec(Val v) {
 	switch (v.kind) {
 		case VAL_BOOL:  return 1;
 		case VAL_INT:   return 2;
-		case VAL_FLOAT: return 3;
+		case VAL_RUNE:  return 3;
+		case VAL_FLOAT: return 4;
 		default:        return 0;
 	}
 }
@@ -202,7 +207,8 @@ int prec_to_val_kind(int pr) {
 	switch (pr) {
 		case 1:  return VAL_BOOL;
 		case 2:  return VAL_INT;
-		case 3:  return VAL_FLOAT;
+		case 3:  return VAL_RUNE;
+		case 4:  return VAL_FLOAT;
 		default: return 0;
 	}
 }
@@ -292,6 +298,10 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 			.kind = VAL_FLOAT,
 			.as.vfloat = binop(ctx, n->loc, op, vget(lv), vget(rv))
 		};
+	} else if (lk == VAL_STR && op == AST_OP_ARR && rk == VAL_INT) {
+		da_reserve(VSTR(lv), VSTR(lv)->count + 4);
+		UTF8_Rune rune = utf8_get_nth(VSTR(lv)->items, rv.as.vint);
+		return (Val){.kind = VAL_RUNE, .as.vrune = rune};
 	} else if (lk == VAL_DICT && op == AST_OP_ARR) {
 		Val *val = ValDict_get(VDICT(lv), rv);
 		if (!val) return VNONE;
@@ -306,10 +316,10 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 
 		return da_get(VLIST(lv), rv.as.vint);
 	} else {
-		if (lk != VAL_INT && lk != VAL_FLOAT && lk != VAL_BOOL) {
+		if (lk != VAL_INT && lk != VAL_FLOAT && lk != VAL_BOOL && lk != VAL_RUNE) {
 			eval_error(ctx, n->as.bin_expr.lhs->loc, INVALID_COMB);
 			return VNONE;
-		} else if (rk != VAL_INT && rk != VAL_FLOAT && rk != VAL_BOOL) {
+		} else if (rk != VAL_INT && rk != VAL_FLOAT && rk != VAL_BOOL && rk != VAL_RUNE) {
 			eval_error(ctx, n->as.bin_expr.rhs->loc, INVALID_COMB);
 			return VNONE;
 		}
@@ -323,6 +333,11 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 			case VAL_FLOAT: return (Val){
 				.kind = VAL_FLOAT,
 				.as.vfloat = binop(ctx, n->loc, op, vget(lv), vget(rv))
+			};
+
+			case VAL_RUNE: return (Val){
+				.kind = VAL_RUNE,
+				.as.vrune = binop(ctx, n->loc, op, vget(lv), vget(rv))
 			};
 
 			case VAL_INT: return (Val){
@@ -379,6 +394,16 @@ Val eval_unop(EvalCtx *ctx, AST *n) {
 		};
 
 		default: assert(0);
+	}
+}
+
+void check_index(EvalCtx *ctx, Location loc, long long index, size_t count) {
+	if (index < 0 || index > count) {
+		char err[512];
+		sprintf(err,
+			"index %lli is not in the range 0..%zu",
+			index, count);
+		eval_error(ctx, loc, err);
 	}
 }
 
@@ -452,6 +477,13 @@ Val eval(EvalCtx *ctx, AST *n) {
 					return str;
 				} break;
 
+				case LITERAL_RUNE: {
+					return (Val) {
+						.kind = VAL_RUNE,
+						.as.vrune = n->as.lit.as.vrune,
+					};
+				} break;
+
 				default: assert(0);
 			}
 		} break;
@@ -522,18 +554,22 @@ Val eval(EvalCtx *ctx, AST *n) {
 						if (ctx->err_ctx.got_err) return VNONE;
 
 						if (container.kind == VAL_LIST) {
-							if (key.as.vint < 0 || key.as.vint > VLIST(container)->count) {
-								char err[512];
-								sprintf(err,
-									"index %lli is not in the range 0..%zu",
-									key.as.vint, VLIST(container)->count);
-								eval_error(ctx, n->as.bin_expr.lhs->loc, err);
-								return VNONE;
-							}
+							check_index(ctx, n->loc, key.as.vint, VLIST(container)->count);
+							if (ctx->err_ctx.got_err) return VNONE;
 
 							Val *list_val = &da_get(VLIST(container), key.as.vint);
 							eval_val_mut(ctx, n->loc, n->as.bin_expr.op, list_val, rhs_val);
 							if (ctx->err_ctx.got_err) return VNONE;
+						} else if (container.kind == VAL_STR) {
+							check_index(ctx, n->loc, key.as.vint, VLIST(container)->count);
+							if (ctx->err_ctx.got_err) return VNONE;
+
+							if (rhs_val.kind != VAL_RUNE) {
+								eval_error(ctx, rhs->loc, "rune expected");
+								return VNONE;
+							}
+
+							utf8_set_nth(VSTR(container)->items, key.as.vint, rhs_val.as.vrune);
 						} else if (container.kind == VAL_DICT) {
 							Val *dict_val = ValDict_get(VDICT(container), key);
 							if (!dict_val) ValDict_add(VDICT(container), key, rhs_val);

@@ -20,6 +20,12 @@ void val_sprint_f(Val v, char *buf, int depth) {
 		case VAL_BOOL:  sprintf(buf, "%s", bstr(v.as.vbool)); break;
 		case VAL_FIELD: sprintf(buf, ".%s", v.as.field);      break;
 
+		case VAL_RUNE:
+			char out[4];
+			int n = utf8_encode(v.as.vrune, out);
+			sprintf(buf, "%.*s", n, out);
+			break;
+
 		case VAL_STR:
 			if (depth == 0)
 				sprintf(buf, "%s", VSTR(v)->items);
@@ -107,15 +113,35 @@ Val Float(EvalCtx *ctx, Location call_loc, Vals args) {
 	char *end;
 
 	switch (arg.kind) {
-		case VAL_FLOAT: res = arg.as.vfloat;                  break;
-		case VAL_INT:   res = arg.as.vint;                    break;
-		case VAL_STR:   res = strtod(VSTR(arg)->items, &end); break;
-		default:        err(ctx, call_loc, "cannot convert to float");
+	case VAL_FLOAT: res = arg.as.vfloat;                  break;
+	case VAL_INT:   res = arg.as.vint;                    break;
+	case VAL_STR:   res = strtod(VSTR(arg)->items, &end); break;
+	default:        err(ctx, call_loc, "cannot convert to float");
 	}
 
 	return (Val){
 		.kind = VAL_FLOAT,
-		.as.vfloat = res, 
+		.as.vfloat = res,
+	};
+}
+
+Val Rune(EvalCtx *ctx, Location call_loc, Vals args) {
+	if (args.count != 1) {
+		err(ctx, call_loc, "rune() accepts only 1 argument");
+	}
+
+	Val arg = args.items[0];
+	UTF8_Rune res;
+
+	switch (arg.kind) {
+	case VAL_RUNE: res = arg.as.vrune; break;
+	case VAL_INT:  res = arg.as.vint;  break;
+	default:       err(ctx, call_loc, "cannot convert to rune");
+	}
+
+	return (Val){
+		.kind = VAL_RUNE,
+		.as.vrune = res,
 	};
 }
 
@@ -127,10 +153,10 @@ Val Len(EvalCtx *ctx, Location call_loc, Vals args) {
 	long long len = 0;
 
 	switch (arg.kind) {
-		case VAL_LIST: len = VLIST(arg)->count; break;
-		case VAL_DICT: len = VDICT(arg)->count; break;
-		case VAL_STR:  len = VSTR(arg)->count;  break;
-		default: err(ctx, call_loc, "len() accepts only lists, strings and dictionaries");
+	case VAL_LIST: len = VLIST(arg)->count;          break;
+	case VAL_DICT: len = VDICT(arg)->count;          break;
+	case VAL_STR:  len = utf8_len(VSTR(arg)->items); break;
+	default: err(ctx, call_loc, "len() accepts only lists, strings and dictionaries");
 	}
 
 	return (Val){
@@ -202,9 +228,18 @@ Val Append(EvalCtx *ctx, Location call_loc, Vals args) {
 	} else if (args.items[0].kind == VAL_STR) {
 		StringBuilder *str = VSTR(args.items[0]);
 		for (size_t i = 1; i < args.count; i++) {
-			if (args.items[i].kind != VAL_STR)
-				err(ctx, call_loc, "append() accepts only strings for string appending");
-			sb_appendf(str, "%s", VSTR(args.items[i])->items);
+			switch (args.items[i].kind) {
+			case VAL_STR:
+				sb_appendf(str, "%s", VSTR(args.items[i])->items);
+				break;
+			case VAL_RUNE:
+				char out[4];
+				int n = utf8_encode(args.items[i].as.vrune, out);
+				sb_appendf(str, "%.*s", n, out);
+				break;
+			default:
+				err(ctx, call_loc, "append() accepts only strings and runes for string appending");
+			}
 		}
 	} else err(ctx, call_loc, "append() accepts only list or string");
 
@@ -343,12 +378,14 @@ void reg_types(EvalCtx *ctx) {
 	eval_reg_var(ctx, "_TYPE_LIST_",  (Val){.kind = VAL_INT, .as.vint = VAL_LIST});
 	eval_reg_var(ctx, "_TYPE_DICT_",  (Val){.kind = VAL_INT, .as.vint = VAL_DICT});
 	eval_reg_var(ctx, "_TYPE_STR_",   (Val){.kind = VAL_INT, .as.vint = VAL_STR});
+	eval_reg_var(ctx, "_TYPE_RUNE_",  (Val){.kind = VAL_INT, .as.vint = VAL_RUNE});
 }
 
 void reg_stdlib(EvalCtx *ctx) {
 	reg_types(ctx);
 	eval_reg_func(ctx, "len",     Len);
 	eval_reg_func(ctx, "int",     Int);
+	eval_reg_func(ctx, "rune",    Rune);
 	eval_reg_func(ctx, "float",   Float);
 	eval_reg_func(ctx, "str",     Str);
 	eval_reg_func(ctx, "print",   Print);
