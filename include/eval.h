@@ -75,7 +75,16 @@ typedef struct {
 } EvalSymbol;
 
 
-HT_DECL(EvalScope, HashStr, EvalSymbol)
+typedef struct {
+	enum {
+		EVAL_SKEY_VAR,
+		EVAL_SKEY_FUNC,
+	} kind;
+
+	HashStr hs;
+} EvalScopeKey;
+
+HT_DECL(EvalScope, EvalScopeKey, EvalSymbol)
 typedef DA(EvalScope) EvalStack;
 
 struct EvalCtx {

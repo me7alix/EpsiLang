@@ -3,10 +3,10 @@ println("Original string: ", str);
 println("Length: ", len(str));
 
 str[11] = '?';
-append(str, "?");
+append(str, '!');
 println("After changing: ", str, '\n');
 
 println("Printing runes: ", str[0], str[1], 'и', 'в');
-println("'0' + 3 = ", '0' + 3, '\n');
+println("'0' + 3 = ", "'", '0' + 3, "'", '\n');
 
 println(int(str[0]), ' ', int('П'));

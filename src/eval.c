@@ -4,7 +4,7 @@
 #include "../include/eval.h"
 
 HT_IMPL(ValDict, Val, Val);
-HT_IMPL(EvalScope, HashStr, EvalSymbol);
+HT_IMPL(EvalScope, EvalScopeKey, EvalSymbol);
 
 #define INVALID_COMB "invalid combination of operand and operators"
 
@@ -13,15 +13,16 @@ HT_IMPL(EvalScope, HashStr, EvalSymbol);
 	(vk).kind == VAL_STR  || \
 	(vk).kind == VAL_LIST)
 
-u64 EvalScope_hashf(HashStr hs) {
-	if (!hs.str) return rand();
-	return hs.hash;
+u64 EvalScope_hashf(EvalScopeKey v) {
+	if (!v.hs.str) return rand();
+	return hash_combine(v.hs.hash, hash_num(v.kind));
 }
 
-int EvalScope_compare(HashStr a, HashStr b) {
-	if (!a.str || !b.str) return 1;
-	if (a.hash != b.hash) return 1;
-	return strcmp(a.str, b.str);
+int EvalScope_compare(EvalScopeKey a, EvalScopeKey b) {
+	if (a.kind    != b.kind)    return 1;
+	if (!a.hs.str || !b.hs.str) return 1;
+	if (a.hs.hash != b.hs.hash) return 1;
+	return strcmp(a.hs.str, b.hs.str);
 }
 
 void eval_error(EvalCtx *ctx, Location loc, char *msg) {
@@ -40,7 +41,19 @@ void eval_stack_pop_scope(EvalCtx *ctx) {
 	ctx->stack.count--;
 }
 
-void eval_stack_add(EvalCtx *ctx, HashStr key, EvalSymbol es, Location loc) {
+void eval_stack_add(EvalCtx *ctx, HashStr hs, EvalSymbol es, Location loc) {
+	EvalScopeKey key = {0, hs};
+	switch (es.kind) {
+	case EVAL_SYMB_TEMP:
+	case EVAL_SYMB_VAR:
+		key.kind = EVAL_SKEY_VAR;
+		break;
+	case EVAL_SYMB_FUNC:
+	case EVAL_SYMB_REG_FUNC:
+		key.kind = EVAL_SKEY_FUNC;
+		break;
+	}
+
 	if (EvalScope_get(&da_last(&ctx->stack), key)) {
 		eval_error(ctx, loc, "redefinition of the variable");
 	} else {
@@ -48,9 +61,11 @@ void eval_stack_add(EvalCtx *ctx, HashStr key, EvalSymbol es, Location loc) {
 	}
 }
 
-EvalSymbol *eval_stack_get(EvalCtx *ctx, HashStr var) {
+EvalSymbol *eval_stack_get(EvalCtx *ctx, int kind, HashStr var) {
+	EvalScopeKey key = {kind, var};
+
 	for (int i = ctx->stack.count - 1; i >= 0; i--) {
-		EvalSymbol *smbl = EvalScope_get(&da_get(&ctx->stack, i), var);
+		EvalSymbol *smbl = EvalScope_get(&da_get(&ctx->stack, i), key);
 		if (smbl) return smbl;
 	}
 
@@ -512,14 +527,12 @@ Val eval(EvalCtx *ctx, AST *n) {
 		} break;
 
 		case AST_VAR: {
-			EvalSymbol *es = eval_stack_get(ctx, n->as.var);
+			EvalSymbol *es = eval_stack_get(ctx, EVAL_SKEY_VAR, n->as.var);
 			if (!es) {
-				eval_error(ctx, n->loc, "no such symbol");
+				eval_error(ctx, n->loc, "no such variable");
 				return VNONE;
 			}
 
-			if (es->kind != EVAL_SYMB_VAR)
-				eval_error(ctx, n->loc, "no such variable");
 			return es->as.var.val;
 		} break;
 
@@ -578,11 +591,8 @@ Val eval(EvalCtx *ctx, AST *n) {
 						}
 					} else if (lhs->kind == AST_VAR) {
 						HashStr var = n->as.bin_expr.lhs->as.var;
-						EvalSymbol *es = eval_stack_get(ctx, var);
+						EvalSymbol *es = eval_stack_get(ctx, EVAL_SKEY_VAR, var);
 						if (!es) {
-							eval_error(ctx, n->loc, "no such symbol");
-							return VNONE;
-						} else if (es->kind != EVAL_SYMB_VAR) {
 							eval_error(ctx, n->loc, "no such variable");
 							return VNONE;
 						}
@@ -715,9 +725,9 @@ Val eval(EvalCtx *ctx, AST *n) {
 		} break;
 
 		case AST_FUNC_CALL: {
-			EvalSymbol *func = eval_stack_get(ctx, HS(n->as.func_call.id));
+			EvalSymbol *func = eval_stack_get(ctx, EVAL_SKEY_FUNC, HS(n->as.func_call.id));
 			if (!func) {
-				eval_error(ctx, n->loc, "no such symbol");
+				eval_error(ctx, n->loc, "no such function");
 				return VNONE;
 			}
 
@@ -803,7 +813,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 
 				res = func->as.reg_func(ctx, n->loc, reg_func_args);
 				if (ctx->err_ctx.got_err) return VNONE;
-			} else eval_error(ctx, n->loc, "no such function");
+			}
 
 			return res;
 		} break;
@@ -1000,7 +1010,8 @@ void eval_reg_var(EvalCtx *ctx, const char *id, Val val) {
 	}
 
 	EvalScope *scope = &da_get(&ctx->stack, 0);
-	EvalScope_add(scope, HS((char*)id), ((EvalSymbol){
+	EvalScopeKey key = {EVAL_SKEY_VAR, HS((char*)id)};
+	EvalScope_add(scope, key, ((EvalSymbol){
 		.kind = EVAL_SYMB_VAR,
 		.as.var.val = val,
 	}));
@@ -1013,7 +1024,8 @@ void eval_reg_func(EvalCtx *ctx, const char *id, RegFunc rf) {
 	}
 	
 	EvalScope *scope = &da_get(&ctx->stack, 0);
-	EvalScope_add(scope, HS((char*)id), ((EvalSymbol){
+	EvalScopeKey key = {EVAL_SKEY_FUNC, HS((char*)id)};
+	EvalScope_add(scope, key, ((EvalSymbol){
 		.kind = EVAL_SYMB_REG_FUNC,
 		.as.reg_func = rf,
 	}));

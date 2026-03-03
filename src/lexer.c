@@ -7,6 +7,13 @@
 #include "../3dparty/cplus.h"
 #include "../3dparty/utf8.h"
 
+char *my_strdup(char *s) {
+	size_t len = strlen(s) + 1;
+	char *ns = malloc(len);
+	memcpy(ns, s, len);
+	return ns;
+}
+
 char *read_file(const char *filename) {
 	FILE *file = fopen(filename, "rb");
 	if (!file) return NULL;
@@ -255,7 +262,7 @@ Token lexer_next(Lexer *l) {
 				}
 
 				char str[1]; sprintf(str, "%c", ch);
-				ret = token(l, TOK_CHAR, strdup(str));
+				ret = token(l, TOK_CHAR, my_strdup(str));
 				l->cur_char++;
 			} else {
 				size_t bytes_read;
