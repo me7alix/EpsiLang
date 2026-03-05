@@ -86,6 +86,16 @@ Val eval_new_heap_val(EvalCtx *ctx, int kind) {
 	return hv;
 }
 
+void check_index(EvalCtx *ctx, Location loc, long long index, size_t count) {
+	if (index < 0 || index >= count) {
+		char err[512];
+		sprintf(err,
+			"index %lli is not in the range 0..%zu",
+			index, count);
+		eval_error(ctx, loc, err);
+	}
+}
+
 u64 ValDict_hashf(Val key) {
 	switch (key.kind) {
 		case VAL_NONE:  return 0;
@@ -314,6 +324,9 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 			.as.vfloat = binop(ctx, n->loc, op, vget(lv), vget(rv))
 		};
 	} else if (lk == VAL_STR && op == AST_OP_ARR && rk == VAL_INT) {
+		check_index(ctx, n->loc, rv.as.vint, VSTR(lv)->count);
+		if (ctx->err_ctx.got_err) return VNONE;
+
 		UTF8_Rune rune = utf8_get_nth(VSTR(lv)->items, rv.as.vint);
 		return (Val){.kind = VAL_RUNE, .as.vrune = rune};
 	} else if (lk == VAL_DICT && op == AST_OP_ARR) {
@@ -321,12 +334,8 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 		if (!val) return VNONE;
 		return *val;
 	} else if (lk == VAL_LIST && rk == VAL_INT && op == AST_OP_ARR) {
-		if (rv.as.vint < 0 || rv.as.vint >= VLIST(lv)->count) {
-			char err[512];
-			sprintf(err, "index %lli is not in the range 0..%zu", rv.as.vint, VLIST(lv)->count);
-			eval_error(ctx, n->loc, err);
-			return VNONE;
-		}
+		check_index(ctx, n->loc, rv.as.vint, VLIST(lv)->count);
+		if (ctx->err_ctx.got_err) return VNONE;
 
 		return da_get(VLIST(lv), rv.as.vint);
 	} else {
@@ -408,16 +417,6 @@ Val eval_unop(EvalCtx *ctx, AST *n) {
 		};
 
 		default: assert(0);
-	}
-}
-
-void check_index(EvalCtx *ctx, Location loc, long long index, size_t count) {
-	if (index < 0 || index >= count) {
-		char err[512];
-		sprintf(err,
-			"index %lli is not in the range 0..%zu",
-			index, count);
-		eval_error(ctx, loc, err);
 	}
 }
 
