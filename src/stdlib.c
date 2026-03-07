@@ -18,12 +18,18 @@ void val_sprint_f(Val v, char *buf, int depth) {
 		case VAL_INT:   sprintf(buf, "%lli", v.as.vint);      break;
 		case VAL_FLOAT: sprintf(buf, "%lf", v.as.vfloat);     break;
 		case VAL_BOOL:  sprintf(buf, "%s", bstr(v.as.vbool)); break;
-		case VAL_FIELD: sprintf(buf, ".%s", v.as.field);      break;
 
 		case VAL_RUNE:
 			char out[4];
 			int n = utf8_encode(v.as.vrune, out);
 			sprintf(buf, "%.*s", n, out);
+			break;
+
+		case VAL_FIELD:
+			if (depth == 0)
+				sprintf(buf, "%s", v.as.field);
+			else
+				sprintf(buf, ".%s", v.as.field);
 			break;
 
 		case VAL_STR:

@@ -13,6 +13,10 @@ dict := {
 dict["nine"] = 9;
 dict["one"] = 1;
 
+for key in dict {
+	println(key, ": ", dict[key]);
+}
+
 println(dict);
 
 while true {

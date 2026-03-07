@@ -192,6 +192,15 @@ int ValDict_compare(Val a, Val b) {
 	op == AST_OP_NEG  ? -(v) : \
 	(eval_error(ctx, op_loc, "invalid operator"), 0))
 
+#define brk_cnt_ret(ctx, res) \
+	if (ctx->state == EVAL_CTX_BREAK) { \
+		ctx->state = EVAL_CTX_NONE; break; \
+	} else if (ctx->state == EVAL_CTX_CONT) { \
+		ctx->state = EVAL_CTX_NONE; \
+	} else if (ctx->state == EVAL_CTX_RET) { \
+		return res; \
+	}
+
 void eval_val_mut(EvalCtx *ctx, Location op_loc, AST_Op op, Val *mut, Val to) {
 	if ((is_heap_val(*mut) || is_heap_val(to)) && op != AST_OP_EQ) {
 		eval_error(ctx, op_loc, INVALID_COMB);
@@ -288,6 +297,16 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 			.kind = VAL_BOOL,
 			.as.vbool = strcmp(VSTR(lv)->items, VSTR(rv)->items) == 0,
 		};
+	} else if (lk == VAL_FIELD && rk == VAL_FIELD && op == AST_OP_IS_EQ) {
+	return (Val){
+			.kind = VAL_BOOL,
+			.as.vbool = strcmp(lv.as.field, rv.as.field) == 0,
+		};
+	} else if (lk == VAL_FIELD && rk == VAL_FIELD && op == AST_OP_NOT_EQ) {
+		return (Val){
+			.kind = VAL_BOOL,
+			.as.vbool = strcmp(lv.as.field, rv.as.field) != 0,
+		};
 	} else if (op == AST_OP_IS_EQ || op == AST_OP_NOT_EQ ||
 		op == AST_OP_AND || op == AST_OP_OR ||
 		op == AST_OP_GREAT || op == AST_OP_GREAT_EQ ||
@@ -357,17 +376,14 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 				.kind = VAL_FLOAT,
 				.as.vfloat = binop(ctx, n->loc, op, vget(lv), vget(rv))
 			};
-
 			case VAL_RUNE: return (Val){
 				.kind = VAL_RUNE,
 				.as.vrune = binop(ctx, n->loc, op, vget(lv), vget(rv))
 			};
-
 			case VAL_INT: return (Val){
 				.kind = VAL_INT,
 				.as.vint = binop(ctx, n->loc, op, vget(lv), vget(rv))
 			};
-
 			case VAL_BOOL: return (Val){
 				.kind = VAL_BOOL,
 				.as.vbool = binop(ctx, n->loc, op, vget(lv), vget(rv))
@@ -376,6 +392,19 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 	}
 
 	return VNONE;
+}
+
+size_t val_get_count(Val coll) {
+	switch (coll.kind) {
+	case VAL_LIST:
+		return VLIST(coll)->count;
+	case VAL_STR:
+		return utf8_len(VSTR(coll)->items);
+	case VAL_DICT:
+		return VDICT(coll)->count;
+	default:
+		return 0;
+	}
 }
 
 Val eval_unop(EvalCtx *ctx, AST *n) {
@@ -671,45 +700,52 @@ Val eval(EvalCtx *ctx, AST *n) {
 			Val coll = eval(ctx, n->as.st_foreach.coll);
 			if (ctx->err_ctx.got_err) return VNONE;
 
-			if (coll.kind != VAL_LIST && coll.kind != VAL_STR) {
-				eval_error(ctx, n->as.st_foreach.coll->loc, "expected string or list");
+			if (coll.kind != VAL_LIST && coll.kind != VAL_STR && coll.kind != VAL_DICT) {
+				eval_error(ctx, n->as.st_foreach.coll->loc, "expected list, string or dictionary");
 				return VNONE;
 			}
 
-			size_t count;
-			if (coll.kind == VAL_LIST) {
-				count = VLIST(coll)->count;
-			} else {
-				count = utf8_len(VSTR(coll)->items);
-			}
+			if (coll.kind == VAL_DICT) {
+				ht_foreach_node(ValDict, VDICT(coll), val) {
+					eval_stack_push_scope(ctx);
+					eval_stack_add(ctx, HS(var_id), (EvalSymbol){
+						.kind = EVAL_SYMB_VAR,
+						.as.var.val = val->key,
+					}, n->loc);
 
-			for (size_t i = 0; i < count; i++) {
-				Val x;
-				if (coll.kind == VAL_LIST) {
-					x = VLIST(coll)->items[i];
-				} else {
-					x = (Val){
-						.kind = VAL_RUNE,
-						.as.vrune = utf8_get_nth(VSTR(coll)->items, i),
-					};
+					Val res = eval(ctx, n->as.st_for.body);
+					if (ctx->err_ctx.got_err) return VNONE;
+					eval_stack_pop_scope(ctx);
+					brk_cnt_ret(ctx, res);
 				}
+			} else {
+				Val x = VNONE;
+				size_t count = val_get_count(coll);
 
-				eval_stack_push_scope(ctx);
-				eval_stack_add(ctx, HS(var_id), (EvalSymbol){
-					.kind = EVAL_SYMB_VAR,
-					.as.var.val = x,
-				}, n->loc);
+				for (size_t i = 0; i < count; i++) {
+					count = val_get_count(coll);
 
-				Val res = eval(ctx, n->as.st_for.body);
-				if (ctx->err_ctx.got_err) return VNONE;
-				eval_stack_pop_scope(ctx);
+					switch (coll.kind) {
+					case VAL_LIST:
+						x = VLIST(coll)->items[i];
+						break;
+					case VAL_STR:
+						x = (Val){
+							.kind = VAL_RUNE,
+							.as.vrune = utf8_get_nth(VSTR(coll)->items, i),
+						};
+					}
 
-				if (ctx->state == EVAL_CTX_BREAK) {
-					ctx->state = EVAL_CTX_NONE; break;
-				} else if (ctx->state == EVAL_CTX_CONT) {
-					ctx->state = EVAL_CTX_NONE;
-				} else if (ctx->state == EVAL_CTX_RET) {
-					return res;
+					eval_stack_push_scope(ctx);
+					eval_stack_add(ctx, HS(var_id), (EvalSymbol){
+						.kind = EVAL_SYMB_VAR,
+						.as.var.val = x,
+					}, n->loc);
+
+					Val res = eval(ctx, n->as.st_for.body);
+					if (ctx->err_ctx.got_err) return VNONE;
+					eval_stack_pop_scope(ctx);
+					brk_cnt_ret(ctx, res);
 				}
 			}
 		} break;
@@ -733,13 +769,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 
 				Val res = eval(ctx, n->as.st_while.body);
 				if (ctx->err_ctx.got_err) return VNONE;
-				if (ctx->state == EVAL_CTX_BREAK) {
-					ctx->state = EVAL_CTX_NONE; break;
-				} else if (ctx->state == EVAL_CTX_CONT) {
-					ctx->state = EVAL_CTX_NONE;
-				} else if (ctx->state == EVAL_CTX_RET) {
-					return res;
-				}
+				brk_cnt_ret(ctx, res);
 			}
 		} break;
 
