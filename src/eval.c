@@ -671,8 +671,28 @@ Val eval(EvalCtx *ctx, AST *n) {
 			Val coll = eval(ctx, n->as.st_foreach.coll);
 			if (ctx->err_ctx.got_err) return VNONE;
 
-			for (size_t i = 0; i < VLIST(coll)->count; i++) {
-				Val x = VLIST(coll)->items[i];
+			if (coll.kind != VAL_LIST && coll.kind != VAL_STR) {
+				eval_error(ctx, n->as.st_foreach.coll->loc, "expected string or list");
+				return VNONE;
+			}
+
+			size_t count;
+			if (coll.kind == VAL_LIST) {
+				count = VLIST(coll)->count;
+			} else {
+				count = utf8_len(VSTR(coll)->items);
+			}
+
+			for (size_t i = 0; i < count; i++) {
+				Val x;
+				if (coll.kind == VAL_LIST) {
+					x = VLIST(coll)->items[i];
+				} else {
+					x = (Val){
+						.kind = VAL_RUNE,
+						.as.vrune = utf8_get_nth(VSTR(coll)->items, i),
+					};
+				}
 
 				eval_stack_push_scope(ctx);
 				eval_stack_add(ctx, HS(var_id), (EvalSymbol){
