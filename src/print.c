@@ -56,11 +56,15 @@ void ast_print(AST *n, int spaces) {
 				case LITERAL_STR:
 					printf("str(%s)\n", n->as.lit.as.vstr);
 					break;
+
+				case LITERAL_RUNE:
+					printf("str(%u)\n", n->as.lit.as.vrune);
+					break;
 			}
 		} break;
 
 		case AST_VAR: {
-			printf("var(%s)\n", n->as.var);
+			printf("var(%s)\n", n->as.var.str);
 		} break;
 
 		case AST_VAR_DEF: {
@@ -76,7 +80,7 @@ void ast_print(AST *n, int spaces) {
 		case AST_FUNC_DEF: {
 			printf("func_def(");
 			da_foreach (AST*, it, &n->as.func_def.args) {
-				printf("%s", (*it)->as.var);
+				printf("%s", (*it)->as.var.str);
 				if (it - n->as.func_def.args.items != n->as.func_def.args.count - 1)
 					printf(", ");
 			}

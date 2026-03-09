@@ -261,7 +261,7 @@ Token lexer_next(Lexer *l) {
 						goto exit;
 				}
 
-				char str[1]; sprintf(str, "%c", ch);
+				char str[4]; sprintf(str, "%c", ch);
 				ret = token(l, TOK_CHAR, my_strdup(str));
 				l->cur_char++;
 			} else {

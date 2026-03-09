@@ -329,7 +329,7 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 		eval_error(ctx, n->loc, INVALID_COMB);
 	} else if (lk == VAL_STR && rk == VAL_STR && op == AST_OP_ADD) {
 		Val str = eval_new_heap_val(ctx, VAL_STR);
-		StringBuilder *sb = VSTR(str), *lvsb = VSTR(lv), *rvsb = VSTR(rv);
+		StringBuilder *sb = VSTR(str);
 		sb_appendf(sb, "%s%s", VSTR(lv)->items, VSTR(rv)->items);
 		return str;
 	} else if (lk == VAL_LIST && rk == VAL_LIST && op == AST_OP_ADD) {
@@ -665,7 +665,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 		case AST_ST_FOR: {
 			eval_stack_push_scope(ctx);
 
-			Val var = eval(ctx, n->as.st_for.var);
+			eval(ctx, n->as.st_for.var);
 			if (ctx->err_ctx.got_err) return VNONE;
 
 			for (;;) {
