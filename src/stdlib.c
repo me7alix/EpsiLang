@@ -14,72 +14,111 @@
 
 void val_sprint_f(Val v, char *buf, int depth) {
 	switch (v.kind) {
-		case VAL_NONE:  sprintf(buf, "none");                 break;
-		case VAL_INT:   sprintf(buf, "%lli", v.as.vint);      break;
-		case VAL_FLOAT: sprintf(buf, "%lf", v.as.vfloat);     break;
-		case VAL_BOOL:  sprintf(buf, "%s", bstr(v.as.vbool)); break;
+	case VAL_NONE:  sprintf(buf, "none");                 break;
+	case VAL_INT:   sprintf(buf, "%lli", v.as.vint);      break;
+	case VAL_FLOAT: sprintf(buf, "%lf", v.as.vfloat);     break;
+	case VAL_BOOL:  sprintf(buf, "%s", bstr(v.as.vbool)); break;
 
-		case VAL_RUNE:
-			char out[4];
-			int n = utf8_encode(v.as.vrune, out);
-			sprintf(buf, "%.*s", n, out);
-			break;
+	case VAL_RUNE:
+		char out[4];
+		int n = utf8_encode(v.as.vrune, out);
+		sprintf(buf, "%.*s", n, out);
+		break;
 
-		case VAL_FIELD:
-			if (depth == 0)
-				sprintf(buf, "%s", v.as.field);
-			else
-				sprintf(buf, ".%s", v.as.field);
-			break;
+	case VAL_FIELD:
+		if (depth == 0)
+			sprintf(buf, "%s", v.as.field);
+		else
+			sprintf(buf, ".%s", v.as.field);
+		break;
 
-		case VAL_STR:
-			if (depth == 0)
-				sprintf(buf, "%s", VSTR(v)->items);
-			else
-				sprintf(buf, "\"%s\"", VSTR(v)->items);
-			break;
+	case VAL_STR:
+		if (depth == 0)
+			sprintf(buf, "%s", VSTR(v)->items);
+		else
+			sprintf(buf, "\"%s\"", VSTR(v)->items);
+		break;
 
-		case VAL_LIST: {
-			StringBuilder sb = {0};
-			sb_appendf(&sb, "[");
+	case VAL_LIST: {
+		StringBuilder sb = {0};
+		sb_appendf(&sb, "[");
 
-			da_foreach (Val, it, VLIST(v)) {
-				char buf[4096]; val_sprint_f(*it, buf, depth + 1);
-				sb_appendf(&sb, "%s", buf);
-				if (it - VLIST(v)->items != VLIST(v)->count - 1)
-					sb_appendf(&sb, ", ", buf);
-			}
+		da_foreach (Val, it, VLIST(v)) {
+			char buf[4096]; val_sprint_f(*it, buf, depth + 1);
+			sb_appendf(&sb, "%s", buf);
+			if (it - VLIST(v)->items != VLIST(v)->count - 1)
+				sb_appendf(&sb, ", ", buf);
+		}
 
-			sb_appendf(&sb, "]");
-			sprintf(buf, "%s", sb.items);
-			sb_free(&sb);
-		} break;
+		sb_appendf(&sb, "]");
+		sprintf(buf, "%s", sb.items);
+		sb_free(&sb);
+	} break;
 
-		case VAL_DICT: {
-			StringBuilder sb = {0};
-			ValDict *dict = VDICT(v);
-			size_t count = 0;
+	case VAL_DICT: {
+		StringBuilder sb = {0};
+		ValDict *dict = VDICT(v);
+		size_t count = 0;
 
-			sb_appendf(&sb, "{");
-			ht_foreach_node (ValDict, dict, kv) {
-				char buf[4096];
-				val_sprint_f(kv->key, buf, depth + 1);
-				sb_appendf(&sb, "%s: ", buf);
-				val_sprint_f(kv->val, buf, depth + 1);
-				sb_appendf(&sb, "%s", buf);
-				if (count++ < dict->count - 1)
-					sb_appendf(&sb, ", ");
-			}
+		sb_appendf(&sb, "{");
+		ht_foreach_node (ValDict, dict, kv) {
+			char buf[4096];
+			val_sprint_f(kv->key, buf, depth + 1);
+			sb_appendf(&sb, "%s: ", buf);
+			val_sprint_f(kv->val, buf, depth + 1);
+			sb_appendf(&sb, "%s", buf);
+			if (count++ < dict->count - 1)
+				sb_appendf(&sb, ", ");
+		}
 
-			sb_appendf(&sb, "}");
-			sprintf(buf, "%s", sb.items);
-			sb_free(&sb);
-		} break;
+		sb_appendf(&sb, "}");
+		sprintf(buf, "%s", sb.items);
+		sb_free(&sb);
+	} break;
 	}
 }
 
 void val_sprint(Val v, char *buf) {
 	val_sprint_f(v, buf, 0);
+}
+
+Val BitXor(EvalCtx *ctx, Location call_loc, Vals args) {
+	if (args.count != 2)
+		err(ctx, call_loc, "bitxor() accepts only 2 argument");
+
+	if (args.items[0].kind != VAL_INT || args.items[1].kind != VAL_INT)
+		err(ctx, call_loc, "bitxor() accepts only integers");
+
+	return (Val){
+		.kind = VAL_INT,
+		.as.vint = args.items[0].as.vint ^ args.items[1].as.vint,
+	};
+}
+
+Val Split(EvalCtx *ctx, Location call_loc, Vals args) {
+	if (args.count != 2)
+		err(ctx, call_loc, "split() accepts only 2 argument");
+
+	if (args.items[0].kind != VAL_STR || args.items[1].kind != VAL_STR)
+		err(ctx, call_loc, "split() accepts only strings");
+
+	Val str = args.items[0];
+	Val del = args.items[1];
+	Val arr = eval_new_heap_val(ctx, VAL_LIST);
+
+	StringBuilder cstr = {0};
+	sb_appendf(&cstr, "%s", VSTR(str)->items);
+
+	char *pch = strtok(cstr.items, VSTR(del)->items);
+	while (pch) {
+		Val nstr = eval_new_heap_val(ctx, VAL_STR);
+		sb_appendf(VSTR(nstr), "%s", pch);
+		da_append(VLIST(arr), nstr);
+		pch = strtok(NULL, VSTR(del)->items);
+	}
+
+	sb_free(&cstr);
+	return arr;
 }
 
 Val Int(EvalCtx *ctx, Location call_loc, Vals args) {
@@ -219,13 +258,15 @@ Val Input(EvalCtx *ctx, Location call_loc, Vals args) {
 	if (args.items[0].kind != VAL_STR)
 		err(ctx, call_loc, "input() accepts only string");
 
-	char res[1024];
+	char res[1 << 12];
 	Val str = eval_new_heap_val(ctx, VAL_STR);
 
 	printf("%s", VSTR(args.items[0])->items);
-	scanf("%s", res);
-	sb_appendf(VSTR(str), "%s", res);
+	if (fgets(res, sizeof res, stdin) == NULL)
+		err(ctx, call_loc, "no input");
 
+	res[strlen(res) - 1] = '\0';
+	sb_appendf(VSTR(str), "%s", res);
 	return str;
 }
 
@@ -350,10 +391,12 @@ Val Has(EvalCtx *ctx, Location call_loc, Vals args) {
 	if (args.items[0].kind == VAL_DICT) {
 		ValDict *dict = VDICT(args.items[0]);
 		Val key = args.items[1];
+
 		res = ValDict_get(dict, key) != NULL;
 	} else if (args.items[0].kind == VAL_LIST) {
 		Vals *list = VLIST(args.items[0]);
 		Val key = args.items[1];
+
 		da_foreach (Val, v, list) {
 			if (ValDict_compare(*v, key) == 0) {
 				res = true;
@@ -388,6 +431,8 @@ void reg_stdlib(EvalCtx *ctx) {
 	reg_types(ctx);
 	eval_reg_func(ctx, "len",     Len);
 	eval_reg_func(ctx, "int",     Int);
+	eval_reg_func(ctx, "split",   Split);
+	eval_reg_func(ctx, "bitxor",  BitXor);
 	eval_reg_func(ctx, "rune",    Rune);
 	eval_reg_func(ctx, "float",   Float);
 	eval_reg_func(ctx, "str",     Str);
