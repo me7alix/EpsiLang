@@ -287,30 +287,25 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 			.kind = VAL_INT,
 			.as.vint = lv.as.vint % rv.as.vint,
 		};
-	} else if (lk == VAL_STR && rk == VAL_STR && op == AST_OP_NOT_EQ) {
+	} else if (
+		(lk == VAL_STR || lk == VAL_DICT || lk == VAL_FIELD || lk == VAL_LIST) &&
+		(op == AST_OP_IS_EQ || op == AST_OP_NOT_EQ)
+	) {
+		bool res =
+			op == AST_OP_IS_EQ ?
+			ValDict_compare(lv, rv) == 0 :
+			ValDict_compare(lv, rv) != 0;
+
 		return (Val){
 			.kind = VAL_BOOL,
-			.as.vbool = strcmp(VSTR(lv)->items, VSTR(rv)->items) != 0,
+			.as.vbool = res,
 		};
-	} else if (lk == VAL_STR && rk == VAL_STR && op == AST_OP_IS_EQ) {
-		return (Val){
-			.kind = VAL_BOOL,
-			.as.vbool = strcmp(VSTR(lv)->items, VSTR(rv)->items) == 0,
-		};
-	} else if (lk == VAL_FIELD && rk == VAL_FIELD && op == AST_OP_IS_EQ) {
-	return (Val){
-			.kind = VAL_BOOL,
-			.as.vbool = strcmp(lv.as.field, rv.as.field) == 0,
-		};
-	} else if (lk == VAL_FIELD && rk == VAL_FIELD && op == AST_OP_NOT_EQ) {
-		return (Val){
-			.kind = VAL_BOOL,
-			.as.vbool = strcmp(lv.as.field, rv.as.field) != 0,
-		};
-	} else if (op == AST_OP_IS_EQ || op == AST_OP_NOT_EQ ||
-		op == AST_OP_AND || op == AST_OP_OR ||
+	} else if (
+		op == AST_OP_IS_EQ || op == AST_OP_NOT_EQ   ||
+		op == AST_OP_AND   || op == AST_OP_OR       ||
 		op == AST_OP_GREAT || op == AST_OP_GREAT_EQ ||
-		op == AST_OP_LESS || op == AST_OP_LESS_EQ) {
+		op == AST_OP_LESS  || op == AST_OP_LESS_EQ
+	) {
 		bool res;
 
 		if (lk == VAL_NONE && rk != VAL_NONE) {
