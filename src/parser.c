@@ -63,12 +63,11 @@ uint ast_op_precedence(AST_Op op, bool l) {
 		case AST_OP_MUL:
 		case AST_OP_DIV:
 			return l ? 80 : 81;
-		case AST_OP_ARR:
-			return l ? 120 : 121;
 		case AST_OP_FIELD:
 		case AST_OP_NOT:
 		case AST_OP_NEG:
 			return l ? 0 : 111;
+		case AST_OP_ARR:
 		case AST_OP_GET_FIELD:
 			return l ? 110 : 111;
 		default: return 0;
@@ -612,16 +611,16 @@ AST *parse_expr(Parser *p, ParseExprKind pek) {
 						.kind = AST_BIN_EXPR,
 						.loc = peek(p).loc,
 						.as.bin_expr.op =
-							op == TOK_DOT   ? AST_OP_GET_FIELD : 
-							op == TOK_MINUS ? AST_OP_SUB : 0,
+							op == TOK_DOT   ? AST_OP_GET_FIELD :
+							op == TOK_MINUS ? AST_OP_SUB       : 0,
 					}));
 				} else {
 					da_append(&nodes, ast_alloc((AST){
 						.kind = AST_UN_EXPR,
 						.loc = peek(p).loc,
 						.as.un_expr.op =
-							op == TOK_DOT   ? AST_OP_FIELD : 
-							op == TOK_MINUS ? AST_OP_NEG : 0,
+							op == TOK_DOT   ? AST_OP_FIELD :
+							op == TOK_MINUS ? AST_OP_NEG   : 0,
 					}));
 				}
 			} break;
