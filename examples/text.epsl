@@ -1,0 +1,14 @@
+str := "Hello, World!";
+res := "";
+
+for i := 0; i < len(str); i+=1 {
+	for j := 0; j < len(str); j+=1 ->
+		append(res, str[(i + j) % len(str)]);
+	append(res, '\n');
+}
+
+if text_write("result.txt", res) ->
+	println("result.txt was successfully created");
+
+readme := split(text_read("README.md"), " \n");
+println("amount of words in README.md: ", len(readme));
