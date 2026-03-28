@@ -291,10 +291,10 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 		(lk == VAL_STR || lk == VAL_DICT || lk == VAL_FIELD || lk == VAL_LIST) &&
 		(op == AST_OP_IS_EQ || op == AST_OP_NOT_EQ)
 	) {
+		int cmp = ValDict_compare(lv, rv);
 		bool res =
 			op == AST_OP_IS_EQ ?
-			ValDict_compare(lv, rv) == 0 :
-			ValDict_compare(lv, rv) != 0;
+			cmp == 0 : cmp != 0;
 
 		return (Val){
 			.kind = VAL_BOOL,
