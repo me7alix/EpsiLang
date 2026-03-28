@@ -74,7 +74,8 @@ typedef EpslVal (*EpslRegFunc)(EpslEvalCtx *ctx, EpslLocation call_loc, EpslVals
 
 #define EPSL_VNONE ((EpslVal){0})
 
-EpslVal epsl_new_heap_val(EpslCtx *ctx, int kind);
+EpslVal epsl_eval_make_value(EpslEvalCtx *ctx, int kind);
+EpslVal epsl_make_value(EpslCtx *ctx, int kind);
 EpslCtx *epsl_from_str(EpslErrorFn errf, char *code);
 EpslCtx *epsl_from_file(EpslErrorFn errf, char *filename);
 EpslResult epsl_eval(EpslCtx *ctx);
