@@ -96,7 +96,14 @@ void epsl_print_tokens(EpslCtx *ctx) {
 	lexer_print(r->parser.lexer);
 }
 
-EpslVal epsl_new_heap_val(EpslCtx *ctx, int kind) {
+EpslVal epsl_eval_make_value(EpslEvalCtx *ctx, int kind) {
+	EvalCtx *e = (EvalCtx*) ctx;
+	Val val = eval_new_heap_val(e, kind);
+	EpslVal ev; COPY(&ev, &val);
+	return ev;
+}
+
+EpslVal epsl_make_value(EpslCtx *ctx, int kind) {
 	EpslCtxR *r = ctx;
 	Val val = eval_new_heap_val(&r->eval_ctx, kind);
 	EpslVal ev; COPY(&ev, &val);

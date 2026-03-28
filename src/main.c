@@ -5,14 +5,54 @@
 #include "../include/api.h"
 #include "../3dparty/cplus.h"
 
+char *read_file(const char *filename) {
+	FILE *file = fopen(filename, "rb");
+	if (!file) return NULL;
+
+	fseek(file, 0, SEEK_END);
+	long filesize = ftell(file);
+	rewind(file);
+
+	char *buffer = malloc(filesize + 1);
+	size_t read_size = fread(buffer, 1, filesize, file);
+	if (read_size != filesize) {
+		free(buffer);
+		fclose(file);
+		return NULL;
+	}
+
+	buffer[filesize] = '\0';
+	fclose(file);
+
+	return buffer;
+}
+
+bool write_to_file(const char *filename, const char *text) {
+	FILE *file = fopen(filename, "w");
+	if (file == NULL) {
+		return false;
+	}
+
+	if (fputs(text, file) == EOF) {
+		fclose(file);
+		return false;
+	}
+
+	if (fclose(file) == EOF) {
+		return false;
+	}
+
+	return true;
+}
+
 EpslVal Exit(EpslEvalCtx *ctx, EpslLocation cloc, EpslVals args) {
 	if (args.count != 1) {
-		epsl_throw_error(ctx, cloc, "exit() accepts only 1 argument");
+		epsl_throw_error(ctx, cloc, "accepts only 1 argument");
 		return EPSL_VNONE;
 	}
 
 	if (args.items[0].kind != EPSL_VAL_INT) {
-		epsl_throw_error(ctx, cloc, "exit() accepts only integer");
+		epsl_throw_error(ctx, cloc, "accepts only integer");
 		return EPSL_VNONE;
 	}
 
@@ -29,7 +69,7 @@ EpslVal System(EpslEvalCtx *ctx, EpslLocation cloc, EpslVals args) {
 	StringBuilder str = {0};
 	for (size_t i = 0; i < args.count; i++) {
 		if (args.items[i].kind != EPSL_VAL_STR) {
-			epsl_throw_error(ctx, cloc, "system() accepts only strings");
+			epsl_throw_error(ctx, cloc, "accepts only strings");
 			return EPSL_VNONE;
 		}
 
@@ -44,6 +84,48 @@ EpslVal System(EpslEvalCtx *ctx, EpslLocation cloc, EpslVals args) {
 		.kind = EPSL_VAL_INT,
 		.as.vint = res,
 	};
+}
+
+EpslVal TextFileWrite(EpslEvalCtx *ctx, EpslLocation cloc, EpslVals args) {
+	if (args.count != 2) {
+		epsl_throw_error(ctx, cloc, "not enough arguments");
+		return EPSL_VNONE;
+	}
+
+	if (
+		args.items[0].kind != EPSL_VAL_STR ||
+		args.items[1].kind != EPSL_VAL_STR
+	) {
+		epsl_throw_error(ctx, cloc, "strings expected");
+		return EPSL_VNONE;
+	}
+
+	char *filename = epsl_val_get_str(args.items[0])->items;
+	char *text = epsl_val_get_str(args.items[1])->items;
+
+	return (EpslVal){
+		.kind = EPSL_VAL_BOOL,
+		.as.vbool = write_to_file(filename, text),
+	};
+}
+
+EpslVal TextFileRead(EpslEvalCtx *ctx, EpslLocation cloc, EpslVals args) {
+	if (args.count != 1) {
+		epsl_throw_error(ctx, cloc, "not enough arguments");
+		return EPSL_VNONE;
+	}
+
+	if (args.items[0].kind != EPSL_VAL_STR) {
+		epsl_throw_error(ctx, cloc, "string expected");
+		return EPSL_VNONE;
+	}
+
+	char *res = read_file(epsl_val_get_str(args.items[0])->items);
+	if (!res) return EPSL_VNONE;
+
+	EpslVal txt = epsl_eval_make_value(ctx, EPSL_VAL_STR);
+	epsl_val_set_str(txt, res);
+	return txt;
 }
 
 void print_error(EpslLocation loc, EpslErrorKind ek, char *msg) {
@@ -87,7 +169,7 @@ void print_usage() {
 }
 
 void reg_platform(EpslCtx *ctx) {
-	EpslVal str = epsl_new_heap_val(ctx, EPSL_VAL_STR);
+	EpslVal str = epsl_make_value(ctx, EPSL_VAL_STR);
 
 	char *platform;
 #if defined(_WIN32)
@@ -160,17 +242,20 @@ int main(int argc, char *argv[]) {
 		ctx = epsl_from_str(print_error, input_file);
 	}
 
-	EpslVal os_args = epsl_new_heap_val(ctx, EPSL_VAL_LIST);
+	EpslVal os_args = epsl_make_value(ctx, EPSL_VAL_LIST);
 	da_foreach(char*, arg, &script_args) {
-		EpslVal os_arg = epsl_new_heap_val(ctx, EPSL_VAL_STR);
+		EpslVal os_arg = epsl_make_value(ctx, EPSL_VAL_STR);
 		epsl_val_set_str(os_arg, *arg);
 		epsl_val_list_append(os_args, os_arg);
 	}
 
 	reg_platform(ctx);
 	epsl_reg_var(ctx, "_OS_ARGS_", os_args);
-	epsl_reg_func(ctx, "exit", Exit);
-	epsl_reg_func(ctx, "system", System);
+
+	epsl_reg_func(ctx, "text_read",  TextFileRead);
+	epsl_reg_func(ctx, "text_write", TextFileWrite);
+	epsl_reg_func(ctx, "system",     System);
+	epsl_reg_func(ctx, "system",     System);
 
 	if (print_toks) epsl_print_tokens(ctx);
 	else if (print_ast) epsl_print_ast(ctx);

@@ -14,27 +14,7 @@ char *my_strdup(char *s) {
 	return ns;
 }
 
-char *read_file(const char *filename) {
-	FILE *file = fopen(filename, "rb");
-	if (!file) return NULL;
-
-	fseek(file, 0, SEEK_END);
-	long filesize = ftell(file);
-	rewind(file);
-
-	char *buffer = malloc(filesize + 1);
-	size_t read_size = fread(buffer, 1, filesize, file);
-	if (read_size != filesize) {
-		free(buffer);
-		fclose(file);
-		return NULL;
-	}
-
-	buffer[filesize] = '\0';
-	fclose(file);
-
-	return buffer;
-}
+char *read_file(const char *filename);
 
 char *get_word(Lexer *lexer) {
 	while (*lexer->cur_char == ' ')
