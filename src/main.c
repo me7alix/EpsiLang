@@ -255,7 +255,7 @@ int main(int argc, char *argv[]) {
 	epsl_reg_func(ctx, "text_read",  TextFileRead);
 	epsl_reg_func(ctx, "text_write", TextFileWrite);
 	epsl_reg_func(ctx, "system",     System);
-	epsl_reg_func(ctx, "system",     System);
+	epsl_reg_func(ctx, "exit",		 Exit);
 
 	if (print_toks) epsl_print_tokens(ctx);
 	else if (print_ast) epsl_print_ast(ctx);

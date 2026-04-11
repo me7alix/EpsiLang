@@ -307,13 +307,14 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 		op == AST_OP_LESS  || op == AST_OP_LESS_EQ
 	) {
 		bool res;
-
 		if (lk == VAL_NONE && rk != VAL_NONE) {
 			res = false;
 		} else if (lk != VAL_NONE && rk == VAL_NONE) {
 			res = false;
 		} else if (lk == VAL_NONE && rk == VAL_NONE) {
-			res = true;
+			if (op == AST_OP_IS_EQ || op == AST_OP_NOT_EQ) {
+				res = op == AST_OP_IS_EQ;
+			} else eval_error(ctx, n->loc, INVALID_COMB);
 		} else res = binop(ctx, n->loc, op, vget(lv), vget(rv));
 
 		return (Val){
