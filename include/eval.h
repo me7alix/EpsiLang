@@ -22,6 +22,11 @@ typedef struct {
 	Arena from, to;
 } GarbageCollector;
 
+typedef struct {
+	void *data;
+	void (*free)(void *ptr);
+} EvalCustomObj;
+
 typedef struct Val Val;
 typedef DA(Val) Vals;
 
@@ -36,6 +41,7 @@ struct Val {
 		VAL_STR,
 		VAL_LIST,
 		VAL_DICT,
+		VAL_CUSTOM,
 		_VAL_FUNC,
 	} kind;
 	
@@ -98,6 +104,7 @@ struct EvalCtx {
 
 void eval_collect_garbage(EvalCtx *ctx);
 Val eval_make_val(EvalCtx *ctx, int kind);
+Val eval_gc_new_custom(EvalCtx *ctx, EvalCustomObj custom);
 
 Val eval(EvalCtx *ctx, AST *n);
 void eval_reg_var(EvalCtx *ctx, const char *id, Val val);

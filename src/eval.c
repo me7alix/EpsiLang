@@ -943,23 +943,61 @@ Val eval(EvalCtx *ctx, AST *n) {
 
 DA(GC_Object*) freed_objs = {0};
 
-GC_Object *eval_gc_alloc(EvalCtx *ctx, int val_kind) {
+GC_Object *new_gc_obj(int kind) {
 	GC_Object *gco;
+
 	if (freed_objs.count > 0) {
 		gco = da_last(&freed_objs);
 		da_remove_last(&freed_objs);
-		gco->val_kind = val_kind;
+		gco->val_kind = kind;
 	} else {
 		gco = malloc(sizeof(*gco));
 		*gco = (GC_Object){
-			.val_kind = val_kind,
+			.val_kind = kind,
 			.data = malloc(sizeof(union{
-				Vals vals;
-				ValDict dict;
+				Vals          vals;
+				ValDict       dict;
+				EvalCustomObj custom;
 				StringBuilder str;
 			})),
 		};
 	}
+
+	return gco;
+}
+
+void eval_gc_trigger(EvalCtx *ctx) {
+	if (ctx->gc.threshold == 0)
+		ctx->gc.threshold = GC_INIT_THRESHOLD;
+
+	if (ctx->gc.objs.count >= ctx->gc.threshold) {
+		if (ctx->state != EVAL_CTX_RET)
+			eval_collect_garbage(ctx);
+
+		if (ctx->gc.objs.count == 0) {
+			ctx->gc.threshold = GC_INIT_THRESHOLD;
+		} else {
+			size_t v1 = ctx->gc.objs.count * GC_GROWTH_FACTOR;
+			size_t v2 = ctx->gc.objs.count + GC_MIN_GROWTH;
+			ctx->gc.threshold = v1 > v2 ? v1 : v2;
+		}
+	}
+}
+
+Val eval_gc_new_custom(EvalCtx *ctx, EvalCustomObj custom) {
+	GC_Object *gco = new_gc_obj(VAL_CUSTOM);
+	*(EvalCustomObj*)gco->data = custom;
+
+	eval_gc_trigger(ctx);
+	da_append(&ctx->gc.objs, gco);
+
+	Val val = {.kind = VAL_CUSTOM, .as.gc_obj = gco};
+	eval_temp_stack_append(ctx, val);
+	return val;
+}
+
+GC_Object *eval_gc_alloc(EvalCtx *ctx, int val_kind) {
+	GC_Object *gco = new_gc_obj(val_kind);
 
 	switch (val_kind) {
 		case VAL_LIST: {
@@ -980,24 +1018,7 @@ GC_Object *eval_gc_alloc(EvalCtx *ctx, int val_kind) {
 		default: assert(0);
 	}
 
-
-	if (ctx->gc.threshold == 0)
-		ctx->gc.threshold = GC_INIT_THRESHOLD;
-
-	if (ctx->gc.objs.count >= ctx->gc.threshold) {
-		if (ctx->state != EVAL_CTX_RET)
-			eval_collect_garbage(ctx);
-
-		if (ctx->gc.objs.count == 0) {
-			ctx->gc.threshold = GC_INIT_THRESHOLD;
-		} else {
-			size_t v1 = ctx->gc.objs.count * GC_GROWTH_FACTOR;
-			size_t v2 = ctx->gc.objs.count + GC_MIN_GROWTH;
-			ctx->gc.threshold = v1 > v2 ? v1 : v2;
-		}
-	}
-
-
+	eval_gc_trigger(ctx);
 	da_append(&ctx->gc.objs, gco);
 	return gco;
 }
@@ -1053,6 +1074,11 @@ void eval_collect_garbage(EvalCtx *ctx) {
 		GC_Object *obj = da_get(&ctx->gc.objs, i);
 		if (obj->marked) {
 			switch (obj->val_kind) {
+				case VAL_CUSTOM: {
+					EvalCustomObj *custom = obj->data;
+					custom->free(custom->data);
+				} break;
+
 				case VAL_DICT: {
 					ValDict *dict = obj->data;
 					ValDict new = {0};

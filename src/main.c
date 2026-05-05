@@ -11,29 +11,29 @@ bool write_to_file(const char *filename, const char *text);
 EpslVal Exit(EpslEvalCtx *ctx, EpslLocation cloc, EpslVals args) {
 	if (args.count != 1) {
 		epsl_throw_error(ctx, cloc, "accepts only 1 argument");
-		return EPSL_VNONE;
+		return EPSL_NONE;
 	}
 
 	if (args.items[0].kind != EPSL_VAL_INT) {
 		epsl_throw_error(ctx, cloc, "accepts only integer");
-		return EPSL_VNONE;
+		return EPSL_NONE;
 	}
 
 	exit(args.items[0].as.vint);
-	return EPSL_VNONE;
+	return EPSL_NONE;
 }
 
 EpslVal System(EpslEvalCtx *ctx, EpslLocation cloc, EpslVals args) {
 	if (args.count == 0) {
 		epsl_throw_error(ctx, cloc, "arguments were not provided");
-		return EPSL_VNONE;
+		return EPSL_NONE;
 	}
 
 	StringBuilder str = {0};
 	for (size_t i = 0; i < args.count; i++) {
 		if (args.items[i].kind != EPSL_VAL_STR) {
 			epsl_throw_error(ctx, cloc, "accepts only strings");
-			return EPSL_VNONE;
+			return EPSL_NONE;
 		}
 
 		char *arg_str = epsl_val_get_str(args.items[i])->items;
@@ -52,7 +52,7 @@ EpslVal System(EpslEvalCtx *ctx, EpslLocation cloc, EpslVals args) {
 EpslVal TextFileWrite(EpslEvalCtx *ctx, EpslLocation cloc, EpslVals args) {
 	if (args.count != 2) {
 		epsl_throw_error(ctx, cloc, "not enough arguments");
-		return EPSL_VNONE;
+		return EPSL_NONE;
 	}
 
 	if (
@@ -60,7 +60,7 @@ EpslVal TextFileWrite(EpslEvalCtx *ctx, EpslLocation cloc, EpslVals args) {
 		args.items[1].kind != EPSL_VAL_STR
 	) {
 		epsl_throw_error(ctx, cloc, "strings expected");
-		return EPSL_VNONE;
+		return EPSL_NONE;
 	}
 
 	char *filename = epsl_val_get_str(args.items[0])->items;
@@ -75,16 +75,16 @@ EpslVal TextFileWrite(EpslEvalCtx *ctx, EpslLocation cloc, EpslVals args) {
 EpslVal TextFileRead(EpslEvalCtx *ctx, EpslLocation cloc, EpslVals args) {
 	if (args.count != 1) {
 		epsl_throw_error(ctx, cloc, "not enough arguments");
-		return EPSL_VNONE;
+		return EPSL_NONE;
 	}
 
 	if (args.items[0].kind != EPSL_VAL_STR) {
 		epsl_throw_error(ctx, cloc, "string expected");
-		return EPSL_VNONE;
+		return EPSL_NONE;
 	}
 
 	char *res = read_file(epsl_val_get_str(args.items[0])->items);
-	if (!res) return EPSL_VNONE;
+	if (!res) return EPSL_NONE;
 
 	EpslVal txt = epsl_eval_make_value(ctx, EPSL_VAL_STR);
 	epsl_val_set_str(txt, res);
@@ -107,10 +107,11 @@ void print_error(EpslLocation loc, EpslErrorKind ek, char *msg) {
 	while (*loc.line_char != '\n' && *loc.line_char != '\0'){
 		printf("%c", *loc.line_char);
 		if (cnt < chars_num - 1) {
-			if (*loc.line_char != '\t')
+			if (*loc.line_char != '\t') {
 				err_ptr[cnt++] = ' ';
-			else
+			} else {
 				err_ptr[cnt++] = '\t';
+			}
 		}
 
 		loc.line_char++;

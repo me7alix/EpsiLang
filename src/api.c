@@ -101,14 +101,40 @@ void epsl_print_tokens(EpslCtx *ctx) {
 EpslVal epsl_eval_make_value(EpslEvalCtx *ctx, int kind) {
 	EvalCtx *e = (EvalCtx*) ctx;
 	Val val = eval_make_val(e, kind);
-	EpslVal ev; COPY(&ev, &val);
+	EpslVal ev;
+	COPY(&ev, &val);
 	return ev;
 }
 
 EpslVal epsl_make_value(EpslCtx *ctx, int kind) {
-	EpslCtxR *r = ctx;
+	EpslCtxR *r = (EpslCtx*) ctx;
 	Val val = eval_make_val(&r->eval_ctx, kind);
-	EpslVal ev; COPY(&ev, &val);
+	EpslVal ev;
+	COPY(&ev, &val);
+	return ev;
+}
+
+EpslVal epsl_eval_make_custom(EpslEvalCtx *ctx, EpslCustomObj custom) {
+	EvalCtx *e = (EvalCtx*) ctx;
+
+	EvalCustomObj ec;
+	COPY(&ec, &custom);
+	Val val = eval_gc_new_custom(e, ec);
+
+	EpslVal ev;
+	COPY(&ev, &val);
+	return ev;
+}
+
+EpslVal epsl_make_custom(EpslCtx *ctx, EpslCustomObj custom) {
+	EpslCtxR *r = (EpslCtxR*) ctx;
+
+	EvalCustomObj ec;
+	COPY(&ec, &custom);
+	Val val = eval_gc_new_custom(&r->eval_ctx, ec);
+
+	EpslVal ev;
+	COPY(&ev, &val);
 	return ev;
 }
 
