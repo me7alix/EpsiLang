@@ -152,7 +152,7 @@ Val JsonDeserialize(EvalCtx *ctx, Location cloc, Vals args) {
 	long long spaces = 0;
 	if (two_args) spaces = args.items[1].as.vint;
 
-	Val str = eval_new_heap_val(ctx, VAL_STR);
+	Val str = eval_make_val(ctx, VAL_STR);
 	JsonDeserializeF(VSTR(str), args.items[0], 0, spaces);
 	return str;
 }
@@ -164,7 +164,7 @@ typedef struct {
 } JsonParserCtx;
 
 Val json_obj(JsonParserCtx *ctx, Val res) {
-	Val obj = eval_new_heap_val(ctx->ectx, VAL_DICT);
+	Val obj = eval_make_val(ctx->ectx, VAL_DICT);
 	Val res_fld = {.kind = VAL_FIELD, .as.field = "res"};
 	Val err_fld = {.kind = VAL_FIELD, .as.field = "err"};
 	ValDict_add(VDICT(obj), res_fld, res);
@@ -175,10 +175,10 @@ Val json_obj(JsonParserCtx *ctx, Val res) {
 Val json_err(JsonParserCtx *ctx, char *msg) {
 	ctx->got_err = true;
 
-	Val err     = eval_new_heap_val(ctx->ectx, VAL_DICT);
+	Val err     = eval_make_val(ctx->ectx, VAL_DICT);
 	Val res_fld = {.kind = VAL_FIELD, .as.field = "res"};
 	Val err_fld = {.kind = VAL_FIELD, .as.field = "err"};
-	Val err_msg = eval_new_heap_val(ctx->ectx, VAL_STR);
+	Val err_msg = eval_make_val(ctx->ectx, VAL_STR);
 
 	size_t lines = ctx->lex->cur_loc.line_num + 1;
 	size_t chars = ctx->lex->cur_loc.line_char - ctx->lex->cur_loc.line_start + 1;
@@ -223,7 +223,7 @@ Val parse_json(JsonParserCtx *ctx) {
 
 	case TOK_OBRA: {
 		lexer_next(ctx->lex);
-		Val obj = eval_new_heap_val(ctx->ectx, VAL_DICT);
+		Val obj = eval_make_val(ctx->ectx, VAL_DICT);
 		while (lexer_peek(ctx->lex).kind != TOK_CBRA) {
 			Val key = parse_json(ctx);
 			if (ctx->got_err) return key;
@@ -253,7 +253,7 @@ Val parse_json(JsonParserCtx *ctx) {
 
 	case TOK_OSQBRA: {
 		lexer_next(ctx->lex);
-		Val list = eval_new_heap_val(ctx->ectx, VAL_LIST);
+		Val list = eval_make_val(ctx->ectx, VAL_LIST);
 		while (lexer_peek(ctx->lex).kind != TOK_CSQBRA) {
 			Val val = parse_json(ctx);
 			if (ctx->got_err) return val;
@@ -272,7 +272,7 @@ Val parse_json(JsonParserCtx *ctx) {
 	}
 
 	case TOK_STRING:
-		Val str = eval_new_heap_val(ctx->ectx, VAL_STR);
+		Val str = eval_make_val(ctx->ectx, VAL_STR);
 		sb_appendf(VSTR(str), "%s", lexer_next(ctx->lex).data);
 		return str;
 	}
@@ -323,14 +323,14 @@ Val Split(EvalCtx *ctx, Location cloc, Vals args) {
 
 	Val str = args.items[0];
 	Val del = args.items[1];
-	Val arr = eval_new_heap_val(ctx, VAL_LIST);
+	Val arr = eval_make_val(ctx, VAL_LIST);
 
 	StringBuilder cstr = {0};
 	sb_appendf(&cstr, "%s", VSTR(str)->items);
 
 	char *pch = strtok(cstr.items, VSTR(del)->items);
 	while (pch) {
-		Val nstr = eval_new_heap_val(ctx, VAL_STR);
+		Val nstr = eval_make_val(ctx, VAL_STR);
 		sb_appendf(VSTR(nstr), "%s", pch);
 		da_append(VLIST(arr), nstr);
 		pch = strtok(NULL, VSTR(del)->items);
@@ -436,7 +436,7 @@ Val Len(EvalCtx *ctx, Location cloc, Vals args) {
 }
 
 Val Str(EvalCtx *ctx, Location cloc, Vals args) {
-	Val str = eval_new_heap_val(ctx, VAL_STR);
+	Val str = eval_make_val(ctx, VAL_STR);
 
 	da_foreach (Val, v, &args) {
 		val_sprint(*v, VSTR(str), 0);
@@ -479,7 +479,7 @@ Val Input(EvalCtx *ctx, Location cloc, Vals args) {
 		err(ctx, cloc, "accepts only string");
 
 	char res[1 << 12];
-	Val str = eval_new_heap_val(ctx, VAL_STR);
+	Val str = eval_make_val(ctx, VAL_STR);
 
 	printf("%s", VSTR(args.items[0])->items);
 	if (fgets(res, sizeof res, stdin) == NULL)
@@ -559,7 +559,7 @@ Val Range(EvalCtx *ctx, Location cloc, Vals args) {
 		step = args.items[2].as.vint;
 	}
 
-	Val list = eval_new_heap_val(ctx, VAL_LIST);
+	Val list = eval_make_val(ctx, VAL_LIST);
 	if (step > 0) {
 		for (long long i = from; i < to; i += step)
 			da_append(VLIST(list), ((Val){ .kind = VAL_INT, .as.vint = i }));

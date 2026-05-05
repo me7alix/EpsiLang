@@ -53,24 +53,30 @@ typedef struct {
 } AST_Literal;
 
 typedef struct {
-	Lexer lexer;
-	ErrorCtx err_ctx;
-} Parser;
+	char *id;
+	uint uid;
+	uint idx;
+} AST_Var;
 
 typedef struct {
-	char *str;
-	u64 hash;
-} HashStr;
+	enum {
+		AST_SBL_VAR,
+		AST_SBL_FUNC,
+	} kind;
 
-static HashStr HS(char *str) {
-	return (HashStr){
-		.str = str,
-		.hash = hash_str(str),
-	};
-}
+	AST_Var var;
+} AST_Symbol;
 
 typedef struct AST AST;
 typedef DA(AST*) ASTs;
+
+typedef struct {
+	Lexer lexer;
+	ErrorCtx err_ctx;
+	DA(AST_Symbol) symbol_table;
+	size_t stack_ptr;
+} Parser;
+
 struct AST {
 	enum {
 		AST_PROG,
@@ -119,12 +125,12 @@ struct AST {
 			AST *body;
 		} st_for;
 		struct {
-			char *var_id;
+			AST_Var var;
 			AST *coll;
 			AST *body;
 		} st_foreach;
 		struct {
-			char *id;
+			AST_Var var;
 			AST *expr;
 		} var_def;
 		struct {
@@ -143,17 +149,20 @@ struct AST {
 			AST *v;
 		} un_expr;
 		struct {
-			char *id;
+			AST_Var var;
 			ASTs args;
 		} func_call;
 		struct {
-			char *id;
+			AST_Var var;
 			ASTs args;
 			AST *body;
 		} func_def;
-		HashStr var;
+		struct {
+			ASTs stmts;
+			bool scope;
+		} body;
+		AST_Var var;
 		AST *var_mut;
-		ASTs body;
 		AST_Literal lit;
 		ASTs list;
 		ASTs dict;

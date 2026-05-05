@@ -36,6 +36,7 @@ struct Val {
 		VAL_STR,
 		VAL_LIST,
 		VAL_DICT,
+		_VAL_FUNC,
 	} kind;
 	
 	union {
@@ -45,6 +46,7 @@ struct Val {
 		UTF8_Rune vrune;
 		char *field;
 		GC_Object *gc_obj;
+		AST *func;
 	} as;
 };
 
@@ -60,32 +62,24 @@ HT_DECL(ValDict, Val, Val);
 
 typedef struct {
 	enum {
-		EVAL_SYMB_TEMP,
-		EVAL_SYMB_VAR,
-		EVAL_SYMB_FUNC,
-		EVAL_SYMB_REG_FUNC,
+		REG_VAR,
+		REG_FUNC,
 	} kind;
 
 	union {
-		struct { Val val;   } var;
-		struct { Val val;   } temp;
-		struct { AST *node; } func;
-		RegFunc reg_func;
+		Val var;
+		RegFunc func;
 	} as;
-} EvalSymbol;
-
+} RegSymbol;
 
 typedef struct {
-	enum {
-		EVAL_SKEY_VAR,
-		EVAL_SKEY_FUNC,
-	} kind;
+	AST_Var var;
+	Val val;
+} EvalVar;
 
-	HashStr hs;
-} EvalScopeKey;
+typedef DA(EvalVar) EvalScope;
 
-HT_DECL(EvalScope, EvalScopeKey, EvalSymbol)
-typedef DA(EvalScope) EvalStack;
+HT_DECL_STR(RegSymbols, RegSymbol)
 
 struct EvalCtx {
 	enum {
@@ -96,12 +90,14 @@ struct EvalCtx {
 	} state;
 
 	GarbageCollector gc;
-	EvalStack stack;
+	RegSymbols reg_sbls;
+	DA(EvalScope) var_stack;
+	DA(Val) temp_stack;
 	ErrorCtx err_ctx;
 };
 
 void eval_collect_garbage(EvalCtx *ctx);
-Val eval_new_heap_val(EvalCtx *ctx, int kind);
+Val eval_make_val(EvalCtx *ctx, int kind);
 
 Val eval(EvalCtx *ctx, AST *n);
 void eval_reg_var(EvalCtx *ctx, const char *id, Val val);

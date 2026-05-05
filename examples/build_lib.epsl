@@ -25,6 +25,7 @@ srcs := [
 	path("src", "parser.c"),
 	path("src", "eval.c"),
 	path("src", "stdlib.c"),
+	path("src", "utils.c"),
 ];
 
 make_dir("build");

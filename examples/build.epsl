@@ -37,7 +37,7 @@ fn path(...) {
 fn cmd(...) {
 	command := join(_VA_ARGS_);
 	println("[CMD] ", command);
-	if !build_debug_mode ->
+	if !build_debug_mode =>
 		system(command);
 }
 
@@ -65,13 +65,10 @@ fn remove_file(file) {
 	}
 }
 
-
 fn dynamic_lib(p) {
 	if      _OS_ == "LINUX"   => p + ".so";
 	else if _OS_ == "WINDOWS" => p + ".dll";
 	else if _OS_ == "APPLE"   => p + ".dylib";
 }
 
-fn static_lib(p) {
-	return p + ".a";
-}
+fn static_lib(p) => p + ".a";

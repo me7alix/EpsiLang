@@ -22,8 +22,9 @@ EpslCtx *epsl_from_str(EpslErrorFn errf, char *code) {
 
 	ctx->eval_ctx = (EvalCtx){
 		.err_ctx.errf = (ErrorFn) errf,
-		.stack = {0},
-		.gc = {0},
+		.var_stack  = {0},
+		.temp_stack = {0},
+		.gc         = {0},
 	};
 
 	reg_stdlib(&ctx->eval_ctx);
@@ -42,8 +43,9 @@ EpslCtx *epsl_from_file(EpslErrorFn errf, char *filename) {
 
 	ctx->eval_ctx = (EvalCtx){
 		.err_ctx.errf = (ErrorFn) errf,
-		.stack = {0},
-		.gc = {0},
+		.var_stack  = {0},
+		.temp_stack = {0},
+		.gc         = {0},
 	};
 
 	reg_stdlib(&ctx->eval_ctx);
@@ -98,14 +100,14 @@ void epsl_print_tokens(EpslCtx *ctx) {
 
 EpslVal epsl_eval_make_value(EpslEvalCtx *ctx, int kind) {
 	EvalCtx *e = (EvalCtx*) ctx;
-	Val val = eval_new_heap_val(e, kind);
+	Val val = eval_make_val(e, kind);
 	EpslVal ev; COPY(&ev, &val);
 	return ev;
 }
 
 EpslVal epsl_make_value(EpslCtx *ctx, int kind) {
 	EpslCtxR *r = ctx;
-	Val val = eval_new_heap_val(&r->eval_ctx, kind);
+	Val val = eval_make_val(&r->eval_ctx, kind);
 	EpslVal ev; COPY(&ev, &val);
 	return ev;
 }

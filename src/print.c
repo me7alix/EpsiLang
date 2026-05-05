@@ -35,40 +35,42 @@ void ast_print(AST *n, int spaces) {
 
 	case AST_BODY: {
 		printf("body:\n");
-		da_foreach (AST*, it, &n->as.body)
-		ast_print(*it, spaces + gap);
+		da_foreach (AST*, it, &n->as.body.stmts) {
+			ast_print(*it, spaces + gap);
+		}
 	} break;
 
 	case AST_LIT: {
 		switch (n->as.lit.kind) {
-			case LITERAL_INT:
-				printf("int(%lli)\n", n->as.lit.as.vint);
-				break;
-
-			case LITERAL_FLOAT:
-				printf("float(%lf)\n", n->as.lit.as.vfloat);
-				break;
-
-			case LITERAL_BOOL:
-				printf("bool(%s)\n", n->as.lit.as.vbool ? "true" : "false");
-				break;
-
-			case LITERAL_STR:
-				printf("str(%s)\n", n->as.lit.as.vstr);
-				break;
-
-			case LITERAL_RUNE:
-				printf("str(%u)\n", n->as.lit.as.vrune);
-				break;
+		case LITERAL_INT:
+			printf("int(%lli)\n", n->as.lit.as.vint);
+			break;
+		case LITERAL_FLOAT:
+			printf("float(%lf)\n", n->as.lit.as.vfloat);
+			break;
+		case LITERAL_BOOL:
+			printf("bool(%s)\n", n->as.lit.as.vbool ? "true" : "false");
+			break;
+		case LITERAL_STR:
+			printf("str(%s)\n", n->as.lit.as.vstr);
+			break;
+		case LITERAL_RUNE:
+			printf("str(%u)\n", n->as.lit.as.vrune);
 		}
 	} break;
 
 	case AST_VAR: {
-		printf("var(%s)\n", n->as.var.str);
+		printf("var(%s|%u|%u)\n",
+			n->as.var.id,
+			n->as.var.uid,
+			n->as.var.idx);
 	} break;
 
 	case AST_VAR_DEF: {
-		printf("var_def(%s):\n", n->as.var_def.id);
+		printf("var_def(%s|%u|%u):\n",
+			n->as.var_def.var.id,
+			n->as.var_def.var.uid,
+			n->as.var_def.var.idx);
 		ast_print(n->as.var_def.expr, spaces + gap);
 	} break;
 
@@ -80,9 +82,10 @@ void ast_print(AST *n, int spaces) {
 	case AST_FUNC_DEF: {
 		printf("func_def(");
 		da_foreach (AST*, it, &n->as.func_def.args) {
-			printf("%s", (*it)->as.var.str);
-			if (it - n->as.func_def.args.items != n->as.func_def.args.count - 1)
+			printf("%s|%d", (*it)->as.var.id, (*it)->as.var.idx);
+			if (it - n->as.func_def.args.items != n->as.func_def.args.count - 1) {
 				printf(", ");
+			}
 		}
 		printf("):\n");
 		ast_print(n->as.func_def.body, spaces + gap);
@@ -122,7 +125,7 @@ void ast_print(AST *n, int spaces) {
 	} break;
 
 	case AST_FUNC_CALL: {
-		printf("func_call(%s):\n", n->as.func_call.id);
+		printf("func_call(%s):\n", n->as.func_call.var.id);
 		da_foreach (AST*, it, &n->as.func_call.args)
 		ast_print(*it, spaces + gap);
 	} break;
@@ -167,7 +170,7 @@ void ast_print(AST *n, int spaces) {
 	} break;
 
 	case AST_ST_FOREACH: {
-		printf("foreach(%s):\n", n->as.st_foreach.var_id);
+		printf("foreach(%u):\n", n->as.st_foreach.var.id);
 		ast_print(n->as.st_foreach.coll, gap);
 		ast_print(n->as.st_foreach.body, gap);
 	} break;
