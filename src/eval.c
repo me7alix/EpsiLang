@@ -477,8 +477,8 @@ Val eval(EvalCtx *ctx, AST *n) {
 			return eval(ctx, n->as.prog.body);
 
 		case AST_BODY: {
-			if (n->as.body.scope)
-				eval_stack_push_scope(ctx);
+			bool scope = n->as.body.scope;
+			if (scope) eval_stack_push_scope(ctx);
 
 			da_foreach (AST*, st, &n->as.body.stmts) {
 				if (st == NULL) continue;
@@ -487,16 +487,16 @@ Val eval(EvalCtx *ctx, AST *n) {
 				if (ctx->state == EVAL_CTX_RET  ||
 					ctx->state == EVAL_CTX_CONT ||
 					ctx->state == EVAL_CTX_BREAK) {
-					if (n->as.body.scope)
-						eval_stack_pop_scope(ctx);
+					if (scope) eval_stack_pop_scope(ctx);
 					if (ctx->state == EVAL_CTX_RET)
 						eval_temp_stack_append(ctx, res);
 					return res;
 				}
 			}
 
-			if (n->as.body.scope)
+			if (scope) {
 				eval_stack_pop_scope(ctx);
+			}
 		} break;
 
 		case AST_VAR_DEF: {
@@ -718,16 +718,19 @@ Val eval(EvalCtx *ctx, AST *n) {
 				
 				if (!cond.as.vbool) break;
 
-				Val res = eval(ctx, n->as.st_for.body);
-				if (ctx->err_ctx.got_err) return VNONE;
-				if (ctx->state == EVAL_CTX_BREAK) {
-					ctx->state = EVAL_CTX_NONE; break;
-				} else if (ctx->state == EVAL_CTX_CONT) {
-					ctx->state = EVAL_CTX_NONE;
-				} else if (ctx->state == EVAL_CTX_RET) {
-					eval_stack_pop_scope(ctx);
-					return res;
-				}
+				eval_stack_push_scope(ctx); {
+					Val res = eval(ctx, n->as.st_for.body);
+					if (ctx->err_ctx.got_err) return VNONE;
+					if (ctx->state == EVAL_CTX_BREAK) {
+						ctx->state = EVAL_CTX_NONE; break;
+					} else if (ctx->state == EVAL_CTX_CONT) {
+						ctx->state = EVAL_CTX_NONE;
+					} else if (ctx->state == EVAL_CTX_RET) {
+						eval_stack_pop_scope(ctx);
+						eval_stack_pop_scope(ctx);
+						return res;
+					}
+				} eval_stack_pop_scope(ctx);
 
 				eval(ctx, n->as.st_for.mut);
 				if (ctx->err_ctx.got_err) return VNONE;
@@ -965,7 +968,7 @@ GC_Object *new_gc_obj(int kind) {
 			.data = malloc(sizeof(union{
 				Vals          vals;
 				ValDict       dict;
-				EvalCustomObj custom;
+				EvalCustomObj cust;
 				StringBuilder str;
 			})),
 		};
@@ -979,8 +982,9 @@ void eval_gc_trigger(EvalCtx *ctx) {
 		ctx->gc.threshold = GC_INIT_THRESHOLD;
 
 	if (ctx->gc.objs.count >= ctx->gc.threshold) {
-		if (ctx->state != EVAL_CTX_RET)
+		if (ctx->state != EVAL_CTX_RET) {
 			eval_collect_garbage(ctx);
+		}
 
 		if (ctx->gc.objs.count == 0) {
 			ctx->gc.threshold = GC_INIT_THRESHOLD;
@@ -994,7 +998,7 @@ void eval_gc_trigger(EvalCtx *ctx) {
 
 Val eval_gc_new_custom(EvalCtx *ctx, EvalCustomObj custom) {
 	GC_Object *gco = new_gc_obj(VAL_CUSTOM);
-	*(EvalCustomObj*)gco->data = custom;
+	memcpy(gco->data, &custom, sizeof(custom));
 
 	eval_gc_trigger(ctx);
 	da_append(&ctx->gc.objs, gco);
@@ -1082,11 +1086,6 @@ void eval_collect_garbage(EvalCtx *ctx) {
 		GC_Object *obj = da_get(&ctx->gc.objs, i);
 		if (obj->marked) {
 			switch (obj->val_kind) {
-				case VAL_CUSTOM: {
-					EvalCustomObj *custom = obj->data;
-					custom->free(custom->data);
-				} break;
-
 				case VAL_DICT: {
 					ValDict *dict = obj->data;
 					ValDict new = {0};
@@ -1113,7 +1112,13 @@ void eval_collect_garbage(EvalCtx *ctx) {
 					*str = new;
 				} break;
 
+				case VAL_CUSTOM: break;
 				default: assert(0);
+			}
+		} else {
+			if (obj->val_kind == VAL_CUSTOM) {
+				EvalCustomObj *custom = obj->data;
+				custom->free(custom->data);
 			}
 		}
 	}
