@@ -23,6 +23,7 @@ typedef struct {
 } GarbageCollector;
 
 typedef struct {
+	int kind;
 	void *data;
 	void (*free)(void *ptr);
 } EvalCustomObj;

@@ -75,6 +75,7 @@ struct EpslVal  {
 
 /* Custom object */
 typedef struct {
+	int kind;
 	void *data;
 	void (*free)(void *ptr);
 } EpslCustomObj;
@@ -134,6 +135,9 @@ void epsl_val_set_str(EpslVal val, char *str);
 
 /* Append a value to a list value */
 void epsl_val_list_append(EpslVal list, EpslVal v);
+
+/* Get a custom object from a value */
+EpslCustomObj epsl_val_get_custom(EpslVal v);
 
 /* Throw a runtime error */
 void epsl_throw_error(EpslEvalCtx *ctx, EpslLocation loc, char *msg);

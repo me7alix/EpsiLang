@@ -856,7 +856,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 					args_cnt++;
 					Val val = eval(ctx, func_call_arg);
 					eval_stack_append(ctx,
-							func_def_arg->as.var);
+						func_def_arg->as.var);
 					eval_stack_set(ctx,
 						func_def_arg->loc,
 						func_def_arg->as.var,
@@ -886,9 +886,17 @@ Val eval(EvalCtx *ctx, AST *n) {
 			} else {
 				RegSymbol *rf = RegSymbols_get(&ctx->reg_sbls, n->as.func_call.var.id);
 				bool err = false;
-				if      (!rf)                  err = true;
-				else if (rf->kind != REG_FUNC) err = true;
-				if (err) eval_error(ctx, n->loc, "no such function");
+
+				if (!rf) {
+					err = true;
+				} else if (rf->kind != REG_FUNC) {
+					err = true;
+				}
+
+				if (err) {
+					eval_error(ctx, n->loc, "no such function");
+					return VNONE;
+				}
 
 				const int max_reg_func_args = 256;
 				if (n->as.func_call.args.count > max_reg_func_args) {

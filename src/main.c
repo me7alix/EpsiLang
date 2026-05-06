@@ -74,7 +74,7 @@ EpslVal TextFileWrite(EpslEvalCtx *ctx, EpslLocation cloc, EpslVals args) {
 
 EpslVal TextFileRead(EpslEvalCtx *ctx, EpslLocation cloc, EpslVals args) {
 	if (args.count != 1) {
-		epsl_throw_error(ctx, cloc, "not enough arguments");
+		epsl_throw_error(ctx, cloc, "1 argument expected");
 		return EPSL_NONE;
 	}
 

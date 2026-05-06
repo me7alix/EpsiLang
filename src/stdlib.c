@@ -19,6 +19,10 @@ void val_sprint(Val v, StringBuilder *sb, int depth) {
 	case VAL_FLOAT: sb_appendf(sb, "%lf", v.as.vfloat);     break;
 	case VAL_BOOL:  sb_appendf(sb, "%s", bstr(v.as.vbool)); break;
 
+	case VAL_CUSTOM:
+		sb_appendf(sb, "CUSTOM(%d)", ((EvalCustomObj*)(v.as.gc_obj->data))->kind);
+		break;
+
 	case VAL_RUNE:
 		char out[4];
 		int n = utf8_encode(v.as.vrune, out);
@@ -637,15 +641,16 @@ error:
 }
 
 void reg_types(EvalCtx *ctx) {
-	eval_reg_var(ctx, "_TYPE_NONE_",  (Val){.kind = VAL_INT, .as.vint = VAL_NONE });
-	eval_reg_var(ctx, "_TYPE_INT_",   (Val){.kind = VAL_INT, .as.vint = VAL_INT  });
-	eval_reg_var(ctx, "_TYPE_BOOL_",  (Val){.kind = VAL_INT, .as.vint = VAL_BOOL });
-	eval_reg_var(ctx, "_TYPE_FIELD_", (Val){.kind = VAL_INT, .as.vint = VAL_FIELD});
-	eval_reg_var(ctx, "_TYPE_FLOAT_", (Val){.kind = VAL_INT, .as.vint = VAL_FLOAT});
-	eval_reg_var(ctx, "_TYPE_LIST_",  (Val){.kind = VAL_INT, .as.vint = VAL_LIST });
-	eval_reg_var(ctx, "_TYPE_DICT_",  (Val){.kind = VAL_INT, .as.vint = VAL_DICT });
-	eval_reg_var(ctx, "_TYPE_STR_",   (Val){.kind = VAL_INT, .as.vint = VAL_STR  });
-	eval_reg_var(ctx, "_TYPE_RUNE_",  (Val){.kind = VAL_INT, .as.vint = VAL_RUNE });
+	eval_reg_var(ctx, "_TYPE_NONE_",   (Val){.kind = VAL_INT, .as.vint = VAL_NONE  });
+	eval_reg_var(ctx, "_TYPE_INT_",    (Val){.kind = VAL_INT, .as.vint = VAL_INT   });
+	eval_reg_var(ctx, "_TYPE_BOOL_",   (Val){.kind = VAL_INT, .as.vint = VAL_BOOL  });
+	eval_reg_var(ctx, "_TYPE_FIELD_",  (Val){.kind = VAL_INT, .as.vint = VAL_FIELD });
+	eval_reg_var(ctx, "_TYPE_FLOAT_",  (Val){.kind = VAL_INT, .as.vint = VAL_FLOAT });
+	eval_reg_var(ctx, "_TYPE_LIST_",   (Val){.kind = VAL_INT, .as.vint = VAL_LIST  });
+	eval_reg_var(ctx, "_TYPE_DICT_",   (Val){.kind = VAL_INT, .as.vint = VAL_DICT  });
+	eval_reg_var(ctx, "_TYPE_STR_",    (Val){.kind = VAL_INT, .as.vint = VAL_STR   });
+	eval_reg_var(ctx, "_TYPE_RUNE_",   (Val){.kind = VAL_INT, .as.vint = VAL_RUNE  });
+	eval_reg_var(ctx, "_TYPE_CUSTOM_", (Val){.kind = VAL_INT, .as.vint = VAL_CUSTOM});
 }
 
 void reg_stdlib(EvalCtx *ctx) {

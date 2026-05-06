@@ -3,8 +3,8 @@
 #include "../include/print.h"
 #include "../include/api.h"
 
-#define COPY(var_dst, src_var) \
-	memcpy(var_dst, src_var, sizeof(*var_dst))
+#define VAR_FROM(T, var, src_var) \
+	T var; memcpy(&(var), (src_var), sizeof(T))
 
 typedef struct {
 	Parser parser;
@@ -54,7 +54,7 @@ EpslCtx *epsl_from_file(EpslErrorFn errf, char *filename) {
 
 void epsl_throw_error(EpslEvalCtx *ctx, EpslLocation loc, char *msg) {
 	EvalCtx *r = (EvalCtx*) ctx;
-	Location rloc; COPY(&rloc, &loc);
+	VAR_FROM(Location, rloc, &loc);
 	r->err_ctx.got_err = true;
 	r->err_ctx.errf(rloc, ERROR_RUNTIME, msg);
 }
@@ -66,7 +66,7 @@ void epsl_reg_func(EpslCtx *ctx, const char *id, EpslRegFunc rf) {
 
 void epsl_reg_var(EpslCtx *ctx, const char *id, EpslVal val) {
 	EpslCtxR *r = ctx;
-	Val ev; COPY(&ev, &val);
+	VAR_FROM(Val, ev, &val);
 	eval_reg_var(&r->eval_ctx, id, ev);
 }
 
@@ -101,58 +101,54 @@ void epsl_print_tokens(EpslCtx *ctx) {
 EpslVal epsl_eval_make_value(EpslEvalCtx *ctx, int kind) {
 	EvalCtx *e = (EvalCtx*) ctx;
 	Val val = eval_make_val(e, kind);
-	EpslVal ev;
-	COPY(&ev, &val);
+	VAR_FROM(EpslVal, ev, &val);
 	return ev;
 }
 
 EpslVal epsl_make_value(EpslCtx *ctx, int kind) {
 	EpslCtxR *r = (EpslCtx*) ctx;
 	Val val = eval_make_val(&r->eval_ctx, kind);
-	EpslVal ev;
-	COPY(&ev, &val);
+	VAR_FROM(EpslVal, ev, &val);
 	return ev;
 }
 
 EpslVal epsl_eval_make_custom(EpslEvalCtx *ctx, EpslCustomObj custom) {
 	EvalCtx *e = (EvalCtx*) ctx;
-
-	EvalCustomObj ec;
-	COPY(&ec, &custom);
+	VAR_FROM(EvalCustomObj, ec, &custom);
 	Val val = eval_gc_new_custom(e, ec);
-
-	EpslVal ev;
-	COPY(&ev, &val);
+	VAR_FROM(EpslVal, ev, &val);
 	return ev;
 }
 
 EpslVal epsl_make_custom(EpslCtx *ctx, EpslCustomObj custom) {
 	EpslCtxR *r = (EpslCtxR*) ctx;
-
-	EvalCustomObj ec;
-	COPY(&ec, &custom);
+	VAR_FROM(EvalCustomObj, ec, &custom);
 	Val val = eval_gc_new_custom(&r->eval_ctx, ec);
-
-	EpslVal ev;
-	COPY(&ev, &val);
+	VAR_FROM(EpslVal, ev, &val);
 	return ev;
 }
 
 EpslString *epsl_val_get_str(EpslVal val) {
-	Val v; COPY(&v, &val);
+	VAR_FROM(Val, v, &val);
 	return (EpslString*)VSTR(v);
 }
 
 void epsl_val_set_str(EpslVal val, char *str) {
-	Val v; COPY(&v, &val);
+	VAR_FROM(Val, v, &val);
 	StringBuilder *sb = VSTR(v);
 	sb_reset(sb);
 	sb_appendf(sb, "%s", str);
 }
 
 void epsl_val_list_append(EpslVal list, EpslVal v) {
-	Val rlist, rv;
-	COPY(&rlist, &list);
-	COPY(&rv, &v);
-	da_append(VLIST(rlist), rv);
+	VAR_FROM(Val, rl, &list);
+	VAR_FROM(Val, rv, &v);
+	da_append(VLIST(rl), rv);
+}
+
+EpslCustomObj epsl_val_get_custom(EpslVal v) {
+	VAR_FROM(Val, val, &v);
+	EvalCustomObj *eval_custom = val.as.gc_obj->data;
+	VAR_FROM(EpslCustomObj, epsl_custom, eval_custom);
+	return epsl_custom;
 }
