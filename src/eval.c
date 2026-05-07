@@ -20,33 +20,22 @@ void eval_error(EvalCtx *ctx, Location loc, char *msg) {
 
 GC_Object *eval_gc_alloc(EvalCtx *ctx, int val_kind);
 
-void eval_stack_append(EvalCtx *ctx, AST_Var var) {
-	EvalScope *ls = &da_last(&ctx->var_stack);
-	da_append(ls, ((EvalVar){.var = var, .val = VNONE}));
-}
-
+static size_t var_stack_ptrs[256];
 static size_t temp_stack_ptrs[256];
-static size_t temp_stack_ptr = 0;
-static size_t max_stack_count = 0;
+static size_t stack_ptr = 0;
 
 void eval_stack_push_scope(EvalCtx *ctx) {
-	if (max_stack_count > ctx->var_stack.count) {
-		ctx->var_stack.items[ctx->var_stack.count].count = 0;
-		ctx->var_stack.count++;
-	} else {
-		da_append(&ctx->var_stack, (EvalScope){0});
-	}
-
-	if (ctx->var_stack.count > max_stack_count) {
-		max_stack_count = ctx->var_stack.count;
-	}
-
-	temp_stack_ptrs[temp_stack_ptr++] = ctx->temp_stack.count;
+	var_stack_ptrs[stack_ptr] = ctx->var_stack.count;
+	temp_stack_ptrs[stack_ptr++] = ctx->temp_stack.count;
 }
 
 void eval_stack_pop_scope(EvalCtx *ctx) {
-	ctx->var_stack.count--;
-	ctx->temp_stack.count = temp_stack_ptrs[--temp_stack_ptr];
+	ctx->var_stack.count = var_stack_ptrs[--stack_ptr];
+	ctx->temp_stack.count = temp_stack_ptrs[stack_ptr];
+}
+
+void eval_stack_append(EvalCtx *ctx, AST_Var var) {
+	da_append(&ctx->var_stack, ((EvalVar){.var = var, .val = VNONE}));
 }
 
 void eval_temp_stack_append(EvalCtx *ctx, Val val) {
@@ -55,9 +44,13 @@ void eval_temp_stack_append(EvalCtx *ctx, Val val) {
 
 void eval_stack_set(EvalCtx *ctx, Location loc, AST_Var var, Val val) {
 	if (var.uid != 0) {
-		for (int i = (int)ctx->var_stack.count - 1; i >= 0; i--) {
-			if (var.idx >= ctx->var_stack.items[i].count) continue;
-			EvalVar *ev = ctx->var_stack.items[i].items + var.idx;
+		for (int i = (int)stack_ptr - 1; i >= 0; i--) {
+			size_t idx = var_stack_ptrs[i];
+			bool last = i == ((int)stack_ptr - 1);
+			size_t next = last * ctx->var_stack.count +
+			             !last * var_stack_ptrs[i + 1];
+			if (var.idx >= (next - idx)) continue;
+			EvalVar *ev = ctx->var_stack.items + idx + var.idx;
 			if (ev->var.uid == var.uid) {
 				ev->val = val;
 				return;
@@ -78,9 +71,13 @@ void eval_stack_set(EvalCtx *ctx, Location loc, AST_Var var, Val val) {
 
 Val eval_stack_get(EvalCtx *ctx, Location loc, AST_Var var) {
 	if (var.uid != 0) {
-		for (int i = (int)ctx->var_stack.count - 1; i >= 0; i--) {
-			if (var.idx >= ctx->var_stack.items[i].count) continue;
-			EvalVar ev = ctx->var_stack.items[i].items[var.idx];
+		for (int i = (int)stack_ptr - 1; i >= 0; i--) {
+			size_t idx = var_stack_ptrs[i];
+			bool last = i == ((int)stack_ptr - 1);
+			size_t next = last * ctx->var_stack.count +
+			             !last * var_stack_ptrs[i + 1];
+			if (var.idx >= (next - idx)) continue;
+			EvalVar ev = ctx->var_stack.items[idx + var.idx];
 			if (ev.var.uid == var.uid) return ev.val;
 		}
 	}
@@ -718,19 +715,16 @@ Val eval(EvalCtx *ctx, AST *n) {
 				
 				if (!cond.as.vbool) break;
 
-				eval_stack_push_scope(ctx); {
-					Val res = eval(ctx, n->as.st_for.body);
-					if (ctx->err_ctx.got_err) return VNONE;
-					if (ctx->state == EVAL_CTX_BREAK) {
-						ctx->state = EVAL_CTX_NONE; break;
-					} else if (ctx->state == EVAL_CTX_CONT) {
-						ctx->state = EVAL_CTX_NONE;
-					} else if (ctx->state == EVAL_CTX_RET) {
-						eval_stack_pop_scope(ctx);
-						eval_stack_pop_scope(ctx);
-						return res;
-					}
-				} eval_stack_pop_scope(ctx);
+				Val res = eval(ctx, n->as.st_for.body);
+				if (ctx->err_ctx.got_err) return VNONE;
+				if (ctx->state == EVAL_CTX_BREAK) {
+					ctx->state = EVAL_CTX_NONE; break;
+				} else if (ctx->state == EVAL_CTX_CONT) {
+					ctx->state = EVAL_CTX_NONE;
+				} else if (ctx->state == EVAL_CTX_RET) {
+					eval_stack_pop_scope(ctx);
+					return res;
+				}
 
 				eval(ctx, n->as.st_for.mut);
 				if (ctx->err_ctx.got_err) return VNONE;
@@ -1069,11 +1063,9 @@ void eval_collect_garbage(EvalCtx *ctx) {
 		(*obj)->marked = false;
 	}
 
-	da_foreach (EvalScope, scope, &ctx->var_stack) {
-		da_foreach (EvalVar, val, scope) {
-			if (is_heap_val(val->val)) {
-				gc_obj_mark(val->val.as.gc_obj);
-			}
+	da_foreach (EvalVar, val, &ctx->var_stack) {
+		if (is_heap_val(val->val)) {
+			gc_obj_mark(val->val.as.gc_obj);
 		}
 	}
 

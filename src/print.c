@@ -176,11 +176,11 @@ void ast_print(AST *n, int spaces) {
 	} break;
 
 	case AST_BREAK: {
-		printf("break");
+		printf("break\n");
 	} break;
 
 	case AST_CONT: {
-		printf("continue");
+		printf("continue\n");
 	} break;
 	
 	case AST_VAL_NONE: {

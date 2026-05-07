@@ -98,7 +98,7 @@ struct EvalCtx {
 
 	GarbageCollector gc;
 	RegSymbols reg_sbls;
-	DA(EvalScope) var_stack;
+	DA(EvalVar) var_stack;
 	DA(Val) temp_stack;
 	ErrorCtx err_ctx;
 };

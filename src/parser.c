@@ -20,14 +20,6 @@ void symbol_table_pop(Parser *p) {
 	p->symbol_table.count = stack_ptrs[--stack_ptr];
 }
 
-AST_Var symbol_table_add(Parser *p, int kind, char *id) {
-	size_t stack_base = stack_ptrs[stack_ptr - 1];
-	uint idx = (uint)(p->symbol_table.count - stack_base);
-	AST_Var var = {id, uid++, idx};
-	da_append(&p->symbol_table, ((AST_Symbol){kind, var}));
-	return var;
-}
-
 AST_Var symbol_table_get(Parser *p, int kind, char *id) {
 	for (int i = (int)(p->symbol_table.count) - 1; i >= 0; i--) {
 		AST_Symbol sbl = p->symbol_table.items[i];
@@ -37,6 +29,22 @@ AST_Var symbol_table_get(Parser *p, int kind, char *id) {
 	}
 
 	return (AST_Var){id, 0, 0};
+}
+
+AST_Var symbol_table_add(Parser *p, Location loc, int kind, char *id) {
+	for (size_t i = stack_ptrs[stack_ptr-1]; i < p->symbol_table.count; i++) {
+		AST_Symbol var = p->symbol_table.items[i];
+		if (var.kind == kind && strcmp(var.var.id, id) == 0) {
+			parser_error(p, loc, "redefinition of a variable");
+			return (AST_Var){0};
+		}
+	}
+
+	size_t stack_base = stack_ptrs[stack_ptr - 1];
+	uint idx = (uint)(p->symbol_table.count - stack_base);
+	AST_Var var = {id, uid++, idx};
+	da_append(&p->symbol_table, ((AST_Symbol){kind, var}));
+	return var;
 }
 
 #define ast(...) ast_alloc((AST){__VA_ARGS__})
@@ -314,7 +322,8 @@ AST *parse_var_def_assign(Parser *p) {
 	expect(p, TOK_ASSIGN);
 	next(p);
 
-	var_def->as.var_def.var = symbol_table_add(p, AST_SBL_VAR, ident);
+	var_def->as.var_def.var = symbol_table_add(p, var_def->loc, AST_SBL_VAR, ident);
+	if (p->err_ctx.got_err) return NULL;
 	var_def->as.var_def.expr = parse_expr(p, PARSE_EXPR_STMT);
 	if (p->err_ctx.got_err) return NULL;
 	return var_def;
@@ -345,14 +354,16 @@ AST *parse_for_stmt(Parser *p) {
 		if (p->err_ctx.got_err) return NULL;
 	} else {
 		for_st->kind = AST_ST_FOREACH;
+		Location loc = peek(p).loc;
 		char *id = next(p).data; next(p);
-		for_st->as.st_foreach.var = symbol_table_add(p, AST_SBL_VAR, id);
+		for_st->as.st_foreach.var = symbol_table_add(p, loc, AST_SBL_VAR, id);
+		if (p->err_ctx.got_err) return NULL;
 		for_st->as.st_foreach.coll = parse_expr(p, PARSE_EXPR_BODY);
 		if (p->err_ctx.got_err) return NULL;
 	}
 
 
-	for_st->as.st_for.body = parse_body(p, false, true);
+	for_st->as.st_for.body = parse_body(p, false, false);
 
 	symbol_table_pop(p);
 	return for_st;
@@ -381,7 +392,8 @@ AST *parse_func_def(Parser *p) {
 		.as.func_def.args = {0},
 	);
 
-	func_def->as.func_def.var = symbol_table_add(p, AST_SBL_FUNC, next(p).data);
+	func_def->as.func_def.var = symbol_table_add(p, func_def->loc, AST_SBL_FUNC, next(p).data);
+	if (p->err_ctx.got_err) return NULL;
 
 	expect(p, TOK_OPAR);
 	if (p->err_ctx.got_err) return NULL;
@@ -406,7 +418,8 @@ AST *parse_func_def(Parser *p) {
 				}
 
 				found_any = true;
-				AST_Var var = symbol_table_add(p, AST_SBL_VAR, "_VA_ARGS_");
+				AST_Var var = symbol_table_add(p, peek(p).loc, AST_SBL_VAR, "_VA_ARGS_");
+				if (p->err_ctx.got_err) return NULL;
 				da_append(&func_def->as.func_def.args, ast(
 					.kind = AST_VAR_ANY,
 					.loc = peek(p).loc,
@@ -415,7 +428,8 @@ AST *parse_func_def(Parser *p) {
 			} break;
 
 			case TOK_ID: {
-				AST_Var var = symbol_table_add(p, AST_SBL_VAR, peek(p).data);
+				AST_Var var = symbol_table_add(p, peek(p).loc, AST_SBL_VAR, peek(p).data);
+				if (p->err_ctx.got_err) return NULL;
 				da_append(&func_def->as.func_def.args, ast(
 					.kind = AST_VAR,
 					.loc = peek(p).loc,
