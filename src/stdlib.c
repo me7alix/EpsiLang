@@ -200,7 +200,7 @@ Val parse_json(JsonParserCtx *ctx) {
 		if (strcmp(id, "null") == 0) {
 			lexer_next(ctx->lex);
 			return (Val){.kind = VAL_NONE};
-		}	
+		}
 	} break;
 
 	case TOK_TRUE:
@@ -292,7 +292,8 @@ Val JsonSerialize(EvalCtx *ctx, Location cloc, Vals args) {
 		err(ctx, cloc, "expected string as first argument");
 
 	Val str = args.items[0];
-	Lexer lexer = lexer_from_str("json", VSTR(str)->items);
+	Arena arena = {0};
+	Lexer lexer = lexer_from_str(&arena, "json", VSTR(str)->items);
 
 	JsonParserCtx jctx = {
 		.ectx = ctx,
@@ -301,6 +302,8 @@ Val JsonSerialize(EvalCtx *ctx, Location cloc, Vals args) {
 	};
 
 	Val res = parse_json(&jctx);
+	arena_free(&arena);
+	lexer_free(&lexer);
 	if (jctx.got_err) return res;
 	return json_obj(&jctx, res);
 }

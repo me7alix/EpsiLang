@@ -17,7 +17,8 @@ typedef struct {
 #define GC_MIN_GROWTH 64
 
 typedef struct {
-	DA(GC_Object*) objs;
+	DA(GC_Object*) freed_objs;
+	DA(GC_Object*) alive_objs;
 	size_t threshold;
 	Arena from, to;
 } GarbageCollector;
@@ -45,7 +46,7 @@ struct Val {
 		VAL_CUSTOM,
 		_VAL_FUNC,
 	} kind;
-	
+
 	union {
 		long long vint;
 		double vfloat;
@@ -110,5 +111,6 @@ Val eval_gc_new_custom(EvalCtx *ctx, EvalCustomObj custom);
 Val eval(EvalCtx *ctx, AST *n);
 void eval_reg_var(EvalCtx *ctx, const char *id, Val val);
 void eval_reg_func(EvalCtx *ctx, const char *id, RegFunc rf);
+void eval_free(EvalCtx *ctx);
 
 #endif

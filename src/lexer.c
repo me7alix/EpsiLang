@@ -7,14 +7,14 @@
 #include "../3dparty/cplus.h"
 #include "../3dparty/utf8.h"
 
-char *my_strdup(char *s) {
-	size_t len = strlen(s) + 1;
-	char *ns = malloc(len);
-	memcpy(ns, s, len);
-	return ns;
-}
-
 char *read_file(const char *filename);
+static char  chp(Lexer *l) { return *l->cur_char;   }
+static char  chn(Lexer *l) { return *l->cur_char++; }
+static char *chl(Lexer *l) { return  l->cur_char;   }
+
+char *dup(Lexer *l, char *str) {
+	return arena_strdup(l->arena, str);
+}
 
 char *get_word(Lexer *lexer) {
 	while (*lexer->cur_char == ' ')
@@ -28,7 +28,7 @@ char *get_word(Lexer *lexer) {
 	lexer->cur_char--;
 
 	size_t l = lexer->cur_char - start + 1;
-	char *word = malloc(sizeof(char) * (l+1));
+	char *word = arena_alloc(lexer->arena, sizeof(char) * (l+1));
 	memcpy(word, start, l);
 	word[l] = '\0';
 	return word;
@@ -49,25 +49,34 @@ bool is_tok(Lexer *lexer, const char *tok) {
 		if (tok[i] != str[i]) return false;
 	}
 
-	if (isalpha(str[strlen(tok)]) || str[strlen(tok)] == '_')
+	if (isalpha(str[strlen(tok)]) || str[strlen(tok)] == '_') {
 		return false;
+	}
 
 	return true;
 }
 
-Lexer lexer_from_str(char *file, char *code) {
+Lexer lexer_from_str(Arena *arena, char *file, char *code) {
+	size_t len = strlen(code) + 1;
+	char *memory = malloc(len);
+	memcpy(memory, code, len);
+
 	return (Lexer) {
+		.arena = arena,
+		.memory = memory,
 		.cur_loc.file = file,
 		.cur_loc.line_num = 0,
-		.cur_loc.line_start = code,
-		.cur_loc.line_char = code,
-		.cur_char = code,
+		.cur_loc.line_start = memory,
+		.cur_loc.line_char = memory,
+		.cur_char = memory,
 	};
 }
 
-Lexer lexer_from_file(char *file) {
+Lexer lexer_from_file(Arena *arena, char *file) {
 	char *code = read_file(file);
 	return (Lexer) {
+		.arena = arena,
+		.memory = code,
 		.cur_loc.file = file,
 		.cur_loc.line_num = 0,
 		.cur_loc.line_start = code,
@@ -103,9 +112,10 @@ Token lexer_next(Lexer *l) {
 	l->cur_loc.line_char = l->cur_char;
 	ret.loc = l->cur_loc;
 
-	switch (*l->cur_char) {
-		case ' ': case '\t':
-			l->cur_char++;
+	switch (chp(l)) {
+		case ' ':
+		case '\t':
+			chn(l);
 			return lexer_next(l);
 
 		case '\0':
@@ -123,81 +133,81 @@ Token lexer_next(Lexer *l) {
 		case '%': ret = token(l, TOK_PS,    "%"); break;
 
 		case '.': {
-			if (l->cur_char[1] == '.' && l->cur_char[2] == '.') {
+			if (chl(l)[1] == '.' && chl(l)[2] == '.') {
 				ret = token(l, TOK_ANY, "...");
-				l->cur_char += 2;
+				chn(l); chn(l);
 			} else ret = token(l, TOK_DOT, ".");
 		} break;
 
 		case '+': {
-			if (l->cur_char[1] == '=') {
+			if (chl(l)[1] == '=') {
 				ret = token(l, TOK_PLUS_EQ, "+=");
-				l->cur_char++;
+				chn(l);
 			} else ret = token(l, TOK_PLUS, "+");
 		} break;
 
 		case '-': {
-			if (l->cur_char[1] == '=') {
+			if (chl(l)[1] == '=') {
 				ret = token(l, TOK_MINUS_EQ, "-=");
-				l->cur_char++;
-			} else if (l->cur_char[1] == '>') {
+				chn(l);
+			} else if (chl(l)[1] == '>') {
 				ret = token(l, TOK_ARROW, "->");
-				l->cur_char++;
+				chn(l);
 			} else ret = token(l, TOK_MINUS, "-");
 		} break;
 
 		case '*': {
-			if (l->cur_char[1] == '=') {
+			if (chl(l)[1] == '=') {
 				ret = token(l, TOK_STAR_EQ, "*=");
-				l->cur_char++;
+				chn(l);
 			} else ret = token(l, TOK_STAR, "*");
 		} break;
 
 		case '/': {
-			if (l->cur_char[1] == '/') {
-				while (*l->cur_char != '\n')
-					l->cur_char++;
+			if (chl(l)[1] == '/') {
+				while (chp(l) != '\n')
+					chn(l);
 				return lexer_next(l);
-			} else if (l->cur_char[1] == '=') {
+			} else if (chl(l)[1] == '=') {
 				ret = token(l, TOK_SLASH_EQ, "/=");
-				l->cur_char++;
+				chn(l);
 			} else ret = token(l, TOK_SLASH, "/");
 		} break;
 
 		case '!': {
-			if (l->cur_char[1] == '=') {
+			if (chl(l)[1] == '=') {
 				ret = token(l, TOK_NOT_EQ, "!=");
-				l->cur_char++;
+				chn(l);
 			} else {
 				ret = token(l, TOK_EXC, "!");
 			}
 		} break;
 
 		case '>': {
-			if (l->cur_char[1] == '=') {
+			if (chl(l)[1] == '=') {
 				ret = token(l, TOK_GREAT_EQ, ">=");
-				l->cur_char++;
+				chn(l);
 			} else {
 				ret = token(l, TOK_GREAT, ">");
 			}
 		} break;
 
 		case '<': {
-			if (l->cur_char[1] == '=') {
+			if (chl(l)[1] == '=') {
 				ret = token(l, TOK_LESS_EQ, "<=");
-				l->cur_char++;
+				chn(l);
 			} else {
 				ret = token(l, TOK_LESS, "<");
 			}
 		} break;
 
 		case '=': {
-			if (l->cur_char[1] == '=') {
+			if (chl(l)[1] == '=') {
 				ret = token(l, TOK_EQ_EQ, "==");
-				l->cur_char++;
-			} else if (l->cur_char[1] == '>') {
+				chn(l);
+			} else if (chl(l)[1] == '>') {
 				ret = token(l, TOK_ARROW_EQ, "=>");
-				l->cur_char++;
+				chn(l);
 			} else {
 				ret = token(l, TOK_EQ, "=");
 			}
@@ -205,137 +215,149 @@ Token lexer_next(Lexer *l) {
 
 		case '\r':
 		case '\n': {
-			if (l->cur_char[0] == '\r' && l->cur_char[1] == '\n')
-				l->cur_char++;
+			if (chl(l)[0] == '\r' && chl(l)[1] == '\n') {
+				chn(l);
+			}
 
+			chn(l);
 			l->cur_loc.line_num++;
-			l->cur_loc.line_start = l->cur_char + 1;
+			l->cur_loc.line_start = chl(l) + 1;
 
-			l->cur_char++;
 			return lexer_next(l);
 		} break;
 
 		case ':': {
-			if (l->cur_char[1] == '=') {
+			if (chl(l)[1] == '=') {
 				ret = token(l, TOK_ASSIGN, ":=");
-				l->cur_char++;
+				chn(l);
 			} else {
 				ret = token(l, TOK_COL, ":");
 			}
 		} break;
 
 		case '\'': {
-			l->cur_char++;
-			if (l->cur_char[0] == '\\') {
+			chn(l);
+			if (chl(l)[0] == '\\') {
 				char ch;
-				l->cur_char++;
-				switch (l->cur_char[0]) {
-					case '\\': ch = '\\'; break;
-					case '0':  ch = '\0'; break;
-					case 'n':  ch = '\n'; break;
-					case 'r':  ch = '\r'; break;
-					case 't':  ch = '\t'; break;
-					case '\'': ch = '\''; break;
-					default:
-						ret = token(l, TOK_ERR, "the string contains invalid character");
-						goto exit;
+				chn(l);
+				switch (chl(l)[0]) {
+				case '\\': ch = '\\'; break;
+				case '0':  ch = '\0'; break;
+				case 'n':  ch = '\n'; break;
+				case 'r':  ch = '\r'; break;
+				case 't':  ch = '\t'; break;
+				case '\'': ch = '\''; break;
+				default:
+					ret = token(l, TOK_ERR, "invalid rune");
+					goto exit;
 				}
 
-				char str[4]; sprintf(str, "%c", ch);
-				ret = token(l, TOK_CHAR, my_strdup(str));
-				l->cur_char++;
+				char str[5]; sprintf(str, "%c", ch);
+				ret = token(l, TOK_CHAR, dup(l, str));
+				chn(l);
 			} else {
 				size_t bytes_read;
-				utf8_decode(l->cur_char, &bytes_read);
-				ret = token(l, TOK_CHAR, l->cur_char);
-				l->cur_char += bytes_read;
+				utf8_decode(chl(l), &bytes_read);
+
+				char *chr = arena_alloc(l->arena, bytes_read + 1);
+				memcpy(chr, chl(l), bytes_read);
+				chr[bytes_read] = '\0';
+
+				ret = token(l, TOK_CHAR, chr);
+				for (size_t i = 0; i < bytes_read; i++) chn(l);
 			}
 
-			if (l->cur_char[0] != '\'') {
+			if (chl(l)[0] != '\'') {
 				ret = token(l, TOK_ERR, "rune should be closed with '");
 			}
 		} break;
 
 		default: {
-			if (isdigit(*l->cur_char)) {
-				char *start = l->cur_char;
+			if (isdigit(chp(l))) {
+				char *start = chl(l);
 				bool isFloat = 0;
 				while (true) {
-					if (*l->cur_char == '.')
+					if (chp(l) == '.')
 						isFloat = 1;
-					if (!(isdigit(l->cur_char[1]) ||
-						isalpha(l->cur_char[1]) ||
-						l->cur_char[1] == '.')) break;
-					l->cur_char++;
+					if (!(isdigit(chl(l)[1]) ||
+						isalpha(chl(l)[1]) ||
+						chl(l)[1] == '.')) break;
+					chn(l);
 				}
 
-				size_t len = l->cur_char - start + 1;
-				char *num = malloc(sizeof(char) * (len+1));
+				size_t len = chl(l) - start + 1;
+				char *num = arena_alloc(l->arena, sizeof(char) * (len+1));
 				memcpy(num, start, len); num[len] = '\0';
 				if (isFloat) ret = token(l, TOK_FLOAT, num);
 				else         ret = token(l, TOK_INT, num);
 			}
 
-			else if (*(l->cur_char) == '"') {
-				StringBuilder sb = {0};
-				l->cur_char++;
+			else if (chp(l) == '"') {
+				StringBuilder sb = {.arena = l->arena};
+				chn(l);
 
-				while (l->cur_char[0] != '\"') {
-					if (l->cur_char[0] == '\\') {
-						switch (l->cur_char[1]) {
-							case '\\': sb_append(&sb, '\\'); break;
-							case '0':  sb_append(&sb, '\0'); break;
-							case 'n':  sb_append(&sb, '\n'); break;
-							case 'r':  sb_append(&sb, '\r'); break;
-							case 't':  sb_append(&sb, '\t'); break;
-							case '\"': sb_append(&sb, '\"'); break;
-							default:
-								ret = token(l, TOK_ERR, "the string contains invalid character");
-								goto exit;
+				while (chl(l)[0] != '\"') {
+					if (chl(l)[0] == '\\') {
+						chn(l);
+						switch (chp(l)) {
+						case '\\': sb_append(&sb, '\\'); break;
+						case '0':  sb_append(&sb, '\0'); break;
+						case 'n':  sb_append(&sb, '\n'); break;
+						case 'r':  sb_append(&sb, '\r'); break;
+						case 't':  sb_append(&sb, '\t'); break;
+						case '\"': sb_append(&sb, '\"'); break;
+						default:
+							ret = token(l, TOK_ERR, "string contains invalid character");
+							goto exit;
 						}
-						l->cur_char++;
-					} else if (l->cur_char[0] == '\0') {
+					} else if (chp(l) == '\0') {
 						ret = token(l, TOK_ID, "unclosed string");
 						break;
 					} else {
-						sb_append(&sb, l->cur_char[0]);
+						sb_append(&sb, chp(l));
 					}
 
-					l->cur_char++;
+					chn(l);
 				}
 
 				sb_append(&sb, '\0');
 				ret = token(l, TOK_STRING, sb.items);
 			}
 
-			else if (*l->cur_char == '\'') {
-				l->cur_char++;
-				if (*l->cur_char == '\\') {
-					l->cur_char++;
-					switch (*l->cur_char) {
-						case '0':  ret = token(l, TOK_CHAR, "\0"); break;
-						case 'n':  ret = token(l, TOK_CHAR, "\n"); break;
-						case 'r':  ret = token(l, TOK_CHAR, "\r"); break;
-						case 't':  ret = token(l, TOK_CHAR, "\t"); break;
-						case '\\': ret = token(l, TOK_CHAR, "\\"); break;
-						case '\'': ret = token(l, TOK_CHAR, "'");  break;
-						default:
-							ret = token(l, TOK_ERR, "invalid character");
-							goto exit;
+			else if (chp(l) == '\'') {
+				chn(l);
+				if (chn(l) == '\\') {
+					char *chr;
+					switch (chp(l)) {
+					case '0':  chr = "\0"; break;
+					case 'n':  chr = "\n"; break;
+					case 'r':  chr = "\r"; break;
+					case 't':  chr = "\t"; break;
+					case '\\': chr = "\\"; break;
+					case '\'': chr = "'";  break;
+					default:
+						ret = token(l, TOK_ERR, "invalid character");
+						goto exit;
 					}
-				} else ret = token(l, TOK_CHAR, l->cur_char);
+					ret = token(l, TOK_CHAR, dup(l, chr));
+				} else {
+					char buf[2];
+					sprintf(buf, "%c", chp(l));
+					ret = token(l, TOK_CHAR, dup(l, buf));
+				}
 
-				l->cur_char++;
-				if (*l->cur_char != '\'')
+				chn(l);
+				if (chp(l) != '\'') {
 					ret = token(l, TOK_ID, "' expected");
+				}
 			}
 
-			else if (isalpha(*l->cur_char) || *l->cur_char == '_') {
+			else if (isalpha(chp(l)) || chp(l) == '_') {
 				for (size_t i = 0; i < ARR_LEN(keywordPairs); i++) {
 					const char *kp = keywordPairs[i].id;
 					if (is_tok(l, kp)) {
 						ret = token(l, keywordPairs[i].kind, (char*)kp);
-						for (size_t i = 0; i < strlen(kp)-1; i++) l->cur_char++;
+						for (size_t i = 0; i < strlen(kp)-1; i++) chn(l);
 						goto exit;
 					}
 				}
@@ -348,7 +370,7 @@ Token lexer_next(Lexer *l) {
 	}
 
 exit:
-	l->cur_char++;
+	chn(l);
 	return ret;
 }
 
@@ -365,4 +387,8 @@ Token lexer_peek2(Lexer *l) {
 	Token t = lexer_next(l);
 	*l = pl;
 	return t;
+}
+
+void lexer_free(Lexer *l) {
+	free(l->memory);
 }

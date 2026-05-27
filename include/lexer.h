@@ -3,6 +3,7 @@
 
 #include "error.h"
 #include <stdbool.h>
+#include "../3dparty/cplus.h"
 
 typedef enum {
 	TOK_EOF,
@@ -55,15 +56,17 @@ typedef struct {
 } Token;
 
 typedef struct {
+	char *memory;
 	char *cur_char;
 	Location cur_loc;
+	Arena *arena;
 } Lexer;
 
-Lexer lexer_from_str(char *file, char *code);
-Lexer lexer_from_file(char *file);
+Lexer lexer_from_str(Arena*, char *file, char *code);
+Lexer lexer_from_file(Arena*, char *file);
 Token lexer_next(Lexer *l);
 Token lexer_peek(Lexer *l);
 Token lexer_peek2(Lexer *l);
-void lexer_free(Lexer *lexer);
+void lexer_free(Lexer *l);
 
 #endif

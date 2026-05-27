@@ -712,7 +712,7 @@ Val eval(EvalCtx *ctx, AST *n) {
 					eval_error(ctx, n->loc, "boolean expected");
 					return VNONE;
 				}
-				
+
 				if (!cond.as.vbool) break;
 
 				Val res = eval(ctx, n->as.st_for.body);
@@ -946,14 +946,12 @@ Val eval(EvalCtx *ctx, AST *n) {
 	return VNONE;
 }
 
-DA(GC_Object*) freed_objs = {0};
-
-GC_Object *new_gc_obj(int kind) {
+GC_Object *new_gc_obj(EvalCtx *ctx, int kind) {
 	GC_Object *gco;
 
-	if (freed_objs.count > 0) {
-		gco = da_last(&freed_objs);
-		da_remove_last(&freed_objs);
+	if (ctx->gc.freed_objs.count > 0) {
+		gco = da_last(&ctx->gc.freed_objs);
+		da_remove_last(&ctx->gc.freed_objs);
 		gco->val_kind = kind;
 	} else {
 		gco = malloc(sizeof(*gco));
@@ -975,27 +973,27 @@ void eval_gc_trigger(EvalCtx *ctx) {
 	if (ctx->gc.threshold == 0)
 		ctx->gc.threshold = GC_INIT_THRESHOLD;
 
-	if (ctx->gc.objs.count >= ctx->gc.threshold) {
+	if (ctx->gc.alive_objs.count >= ctx->gc.threshold) {
 		if (ctx->state != EVAL_CTX_RET) {
 			eval_collect_garbage(ctx);
 		}
 
-		if (ctx->gc.objs.count == 0) {
+		if (ctx->gc.alive_objs.count == 0) {
 			ctx->gc.threshold = GC_INIT_THRESHOLD;
 		} else {
-			size_t v1 = ctx->gc.objs.count * GC_GROWTH_FACTOR;
-			size_t v2 = ctx->gc.objs.count + GC_MIN_GROWTH;
+			size_t v1 = ctx->gc.alive_objs.count * GC_GROWTH_FACTOR;
+			size_t v2 = ctx->gc.alive_objs.count + GC_MIN_GROWTH;
 			ctx->gc.threshold = v1 > v2 ? v1 : v2;
 		}
 	}
 }
 
 Val eval_gc_new_custom(EvalCtx *ctx, EvalCustomObj custom) {
-	GC_Object *gco = new_gc_obj(VAL_CUSTOM);
+	GC_Object *gco = new_gc_obj(ctx, VAL_CUSTOM);
 	memcpy(gco->data, &custom, sizeof(custom));
 
 	eval_gc_trigger(ctx);
-	da_append(&ctx->gc.objs, gco);
+	da_append(&ctx->gc.alive_objs, gco);
 
 	Val val = {.kind = VAL_CUSTOM, .as.gc_obj = gco};
 	eval_temp_stack_append(ctx, val);
@@ -1003,7 +1001,7 @@ Val eval_gc_new_custom(EvalCtx *ctx, EvalCustomObj custom) {
 }
 
 GC_Object *eval_gc_alloc(EvalCtx *ctx, int val_kind) {
-	GC_Object *gco = new_gc_obj(val_kind);
+	GC_Object *gco = new_gc_obj(ctx, val_kind);
 
 	switch (val_kind) {
 		case VAL_LIST: {
@@ -1025,7 +1023,7 @@ GC_Object *eval_gc_alloc(EvalCtx *ctx, int val_kind) {
 	}
 
 	eval_gc_trigger(ctx);
-	da_append(&ctx->gc.objs, gco);
+	da_append(&ctx->gc.alive_objs, gco);
 	return gco;
 }
 
@@ -1059,7 +1057,7 @@ void gc_obj_mark(GC_Object *obj) {
 
 void eval_collect_garbage(EvalCtx *ctx) {
 	// mark phase
-	da_foreach (GC_Object*, obj, &ctx->gc.objs) {
+	da_foreach (GC_Object*, obj, &ctx->gc.alive_objs) {
 		(*obj)->marked = false;
 	}
 
@@ -1074,8 +1072,8 @@ void eval_collect_garbage(EvalCtx *ctx) {
 	}
 
 	// sweep phase
-	for (size_t i = 0; i < ctx->gc.objs.count; i++) {
-		GC_Object *obj = da_get(&ctx->gc.objs, i);
+	for (size_t i = 0; i < ctx->gc.alive_objs.count; i++) {
+		GC_Object *obj = da_get(&ctx->gc.alive_objs, i);
 		if (obj->marked) {
 			switch (obj->val_kind) {
 				case VAL_DICT: {
@@ -1115,11 +1113,11 @@ void eval_collect_garbage(EvalCtx *ctx) {
 		}
 	}
 
-	for (size_t i = 0; i < ctx->gc.objs.count; i++) {
-		GC_Object *obj = da_get(&ctx->gc.objs, i);
+	for (size_t i = 0; i < ctx->gc.alive_objs.count; i++) {
+		GC_Object *obj = da_get(&ctx->gc.alive_objs, i);
 		if (!obj->marked) {
-			da_append(&freed_objs, obj);
-			da_remove_unordered(&ctx->gc.objs, i);
+			da_append(&ctx->gc.freed_objs, obj);
+			da_remove_unordered(&ctx->gc.alive_objs, i);
 			i--;
 		}
 	}
@@ -1142,4 +1140,24 @@ void eval_reg_func(EvalCtx *ctx, const char *id, RegFunc rf) {
 		.kind = REG_FUNC,
 		.as.func = rf,
 	});
+}
+
+void eval_free(EvalCtx *ctx) {
+	da_foreach (GC_Object*, obj, &ctx->gc.alive_objs) {
+		free((*obj)->data);
+		free(*obj);
+	}
+
+	da_foreach (GC_Object*, obj, &ctx->gc.freed_objs) {
+		free((*obj)->data);
+		free(*obj);
+	}
+
+	da_free(&ctx->gc.freed_objs);
+	da_free(&ctx->gc.alive_objs);
+	arena_free(&ctx->gc.from);
+	arena_free(&ctx->gc.to);
+	RegSymbols_free(&ctx->reg_sbls);
+	da_free(&ctx->var_stack);
+	da_free(&ctx->temp_stack);
 }

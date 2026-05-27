@@ -62,7 +62,7 @@ struct EpslVal  {
 		EPSL_VAL_DICT,
 		EPSL_VAL_CUSTOM,
 	} kind;
-	
+
 	union {
 		long long vint;
 		double vfloat;
@@ -141,5 +141,8 @@ EpslCustomObj epsl_val_get_custom(EpslVal v);
 
 /* Throw a runtime error */
 void epsl_throw_error(EpslEvalCtx *ctx, EpslLocation loc, char *msg);
+
+/* Free all used memory */
+void epsl_free(EpslCtx *ctx);
 
 #endif

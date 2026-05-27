@@ -73,8 +73,8 @@ typedef DA(AST*) ASTs;
 typedef struct {
 	Lexer lexer;
 	ErrorCtx err_ctx;
-	DA(AST_Symbol) symbol_table;
-	size_t stack_ptr;
+	DA(AST_Symbol) symbols;
+	Arena arena;
 } Parser;
 
 struct AST {
@@ -169,10 +169,7 @@ struct AST {
 	} as;
 };
 
-#define peek(p)  lexer_peek(&p->lexer)
-#define next(p)  lexer_next(&p->lexer)
-#define peek2(p) lexer_peek2(&p->lexer)
-
 AST *parse(Parser *p);
+void parser_free(Parser *p);
 
 #endif

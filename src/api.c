@@ -16,7 +16,8 @@ extern void reg_stdlib(EvalCtx *ctx);
 EpslCtx *epsl_from_str(EpslErrorFn errf, char *code) {
 	EpslCtxR *ctx = malloc(sizeof(EpslCtxR));
 	ctx->parser = (Parser){
-		.lexer = lexer_from_str("script", code),
+		.arena = {0},
+		.lexer = lexer_from_str(&ctx->parser.arena, "script", code),
 		.err_ctx.errf = (ErrorFn) errf,
 	};
 
@@ -32,14 +33,15 @@ EpslCtx *epsl_from_str(EpslErrorFn errf, char *code) {
 }
 
 EpslCtx *epsl_from_file(EpslErrorFn errf, char *filename) {
-	Lexer lex = lexer_from_file(filename);
-	if (!lex.cur_char) return NULL;
-
 	EpslCtxR *ctx = malloc(sizeof(EpslCtxR));
 	ctx->parser = (Parser){
-		.lexer = lex,
+		.arena = {0},
 		.err_ctx.errf = (ErrorFn) errf,
 	};
+
+	Lexer lex = lexer_from_file(&ctx->parser.arena, filename);
+	if (!lex.cur_char) return NULL;
+	ctx->parser.lexer = lex;
 
 	ctx->eval_ctx = (EvalCtx){
 		.err_ctx.errf = (ErrorFn) errf,
@@ -151,4 +153,10 @@ EpslCustomObj epsl_val_get_custom(EpslVal v) {
 	EvalCustomObj *eval_custom = val.as.gc_obj->data;
 	VAR_FROM(EpslCustomObj, epsl_custom, eval_custom);
 	return epsl_custom;
+}
+
+void epsl_free(EpslCtx *ctx) {
+	EpslCtxR *rctx = (void*)ctx;
+	parser_free(&rctx->parser);
+	eval_free(&rctx->eval_ctx);
 }

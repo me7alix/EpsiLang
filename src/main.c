@@ -223,6 +223,12 @@ int main(int argc, char *argv[]) {
 
 	if (print_toks) epsl_print_tokens(ctx);
 	else if (print_ast) epsl_print_ast(ctx);
-	else epsl_eval(ctx);
+	else {
+		epsl_eval(ctx);
+		epsl_free(ctx);
+		free(ctx);
+	}
+
+	da_free(&script_args);
 	return 0;
 }
