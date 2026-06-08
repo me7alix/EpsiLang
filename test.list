@@ -1,0 +1,8 @@
+echo 'seven' | ./build/epsl examples/dict.epsl
+echo '10' | ./build/epsl examples/fact.epsl
+echo '10 + 5 * 3' | ./build/epsl examples/lexer.epsl
+./build/epsl examples/json.epsl
+./build/epsl examples/list.epsl
+./build/epsl examples/mandelbrot.epsl
+./build/epsl examples/object.epsl
+./build/epsl examples/runes.epsl
