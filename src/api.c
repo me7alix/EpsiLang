@@ -16,16 +16,12 @@ extern void reg_stdlib(EvalCtx *ctx);
 EpslCtx *epsl_from_str(EpslErrorFn errf, char *code) {
 	EpslCtxR *ctx = malloc(sizeof(EpslCtxR));
 	ctx->parser = (Parser){
-		.arena = {0},
 		.lexer = lexer_from_str(&ctx->parser.arena, "script", code),
 		.err_ctx.errf = (ErrorFn) errf,
 	};
 
 	ctx->eval_ctx = (EvalCtx){
 		.err_ctx.errf = (ErrorFn) errf,
-		.var_stack  = {0},
-		.temp_stack = {0},
-		.gc         = {0},
 	};
 
 	reg_stdlib(&ctx->eval_ctx);
@@ -35,7 +31,6 @@ EpslCtx *epsl_from_str(EpslErrorFn errf, char *code) {
 EpslCtx *epsl_from_file(EpslErrorFn errf, char *filename) {
 	EpslCtxR *ctx = malloc(sizeof(EpslCtxR));
 	ctx->parser = (Parser){
-		.arena = {0},
 		.err_ctx.errf = (ErrorFn) errf,
 	};
 
@@ -45,9 +40,6 @@ EpslCtx *epsl_from_file(EpslErrorFn errf, char *filename) {
 
 	ctx->eval_ctx = (EvalCtx){
 		.err_ctx.errf = (ErrorFn) errf,
-		.var_stack  = {0},
-		.temp_stack = {0},
-		.gc         = {0},
 	};
 
 	reg_stdlib(&ctx->eval_ctx);
@@ -58,7 +50,7 @@ void epsl_throw_error(EpslEvalCtx *ctx, EpslLocation loc, char *msg) {
 	EvalCtx *r = (EvalCtx*) ctx;
 	VAR_FROM(Location, rloc, &loc);
 	r->err_ctx.got_err = true;
-	r->err_ctx.errf(rloc, ERROR_RUNTIME, msg);
+	r->err_ctx.errf(&r->call_stack, rloc, ERROR_RUNTIME, msg);
 }
 
 void epsl_reg_func(EpslCtx *ctx, const char *id, EpslRegFunc rf) {
@@ -77,6 +69,11 @@ EpslResult epsl_eval(EpslCtx *ctx) {
 	AST *ast = parse(&r->parser);
 	if (r->parser.err_ctx.got_err)
 		return (EpslResult){.got_err = true};
+
+	da_append(&r->eval_ctx.call_stack, ((FuncCall){
+		.loc = ast->loc,
+		.name = "[main]",
+	}));
 
 	EpslVal erv;
 	Val rv = eval(&r->eval_ctx, ast);

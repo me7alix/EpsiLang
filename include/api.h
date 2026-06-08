@@ -13,6 +13,19 @@ typedef struct {
 	char *line_char;
 } EpslLocation;
 
+/* Call stack for error messages */
+typedef struct {
+	char *name;
+	EpslLocation loc;
+} EpslCall;
+
+typedef struct {
+	EpslCall *items;
+	size_t count;
+	size_t capacity;
+	void *arena;
+} EpslCallStack;
+
 /* Type of error reported by the interpreter */
 typedef enum {
 	EPSL_ERROR_COMPTIME,
@@ -21,6 +34,7 @@ typedef enum {
 
 /* Error callback used by the API to report diagnostics */
 typedef void (*EpslErrorFn)(
+	EpslCallStack *cs,
 	EpslLocation loc,
 	EpslErrorKind ek,
 	char *msg);

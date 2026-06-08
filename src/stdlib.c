@@ -8,7 +8,7 @@
 #define err(ec, loc, msg) \
 	do { \
 		(ec)->err_ctx.got_err = true; \
-		(ec)->err_ctx.errf(loc, ERROR_RUNTIME, msg); \
+		(ec)->err_ctx.errf(&(ec)->call_stack, loc, ERROR_RUNTIME, msg); \
 		return VNONE; \
 	} while(0)
 

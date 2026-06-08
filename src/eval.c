@@ -8,30 +8,34 @@ HT_IMPL_STR(RegSymbols, RegSymbol)
 
 #define INVALID_COMB "invalid combination of operand and operators"
 
-#define is_heap_val(vk) ( \
-	(vk).kind == VAL_DICT || \
-	(vk).kind == VAL_STR  || \
-	(vk).kind == VAL_LIST)
-
 void eval_error(EvalCtx *ctx, Location loc, char *msg) {
 	ctx->err_ctx.got_err = true;
-	ctx->err_ctx.errf(loc, ERROR_RUNTIME, msg);
+	ctx->err_ctx.errf(&ctx->call_stack, loc, ERROR_RUNTIME, msg);
 }
 
-GC_Object *eval_gc_alloc(EvalCtx *ctx, int val_kind);
-
-static size_t var_stack_ptrs[256];
-static size_t temp_stack_ptrs[256];
+#define STACK_SIZE 1024
+static size_t var_stack_ptrs[STACK_SIZE];
+static size_t temp_stack_ptrs[STACK_SIZE];
+static size_t call_stack_ptrs[STACK_SIZE];
 static size_t stack_ptr = 0;
 
 void eval_stack_push_scope(EvalCtx *ctx) {
+	if (stack_ptr == STACK_SIZE) {
+		eval_error(ctx,
+			da_last(&ctx->call_stack).loc,
+			"stack overflow");
+		return;
+	}
+
 	var_stack_ptrs[stack_ptr] = ctx->var_stack.count;
-	temp_stack_ptrs[stack_ptr++] = ctx->temp_stack.count;
+	temp_stack_ptrs[stack_ptr] = ctx->temp_stack.count;
+	call_stack_ptrs[stack_ptr++] = ctx->call_stack.count;
 }
 
 void eval_stack_pop_scope(EvalCtx *ctx) {
 	ctx->var_stack.count = var_stack_ptrs[--stack_ptr];
 	ctx->temp_stack.count = temp_stack_ptrs[stack_ptr];
+	ctx->call_stack.count = call_stack_ptrs[stack_ptr];
 }
 
 void eval_stack_append(EvalCtx *ctx, AST_Var var) {
@@ -89,6 +93,8 @@ Val eval_stack_get(EvalCtx *ctx, Location loc, AST_Var var) {
 
 	eval_error(ctx, loc, "no such variable / function");
 }
+
+GC_Object *eval_gc_alloc(EvalCtx *ctx, int val_kind);
 
 Val eval_make_val(EvalCtx *ctx, int kind) {
 	Val hv = {
@@ -214,6 +220,11 @@ int ValDict_compare(Val a, Val b) {
 	} else if (ctx->state == EVAL_CTX_RET) { \
 		return res; \
 	}
+
+#define is_heap_val(vk) ( \
+	(vk).kind == VAL_DICT || \
+	(vk).kind == VAL_STR  || \
+	(vk).kind == VAL_LIST)
 
 Val eval_val_mut(EvalCtx *ctx, Location op_loc, AST_Op op, Val mut, Val to) {
 	if ((is_heap_val(mut) || is_heap_val(to)) && op != AST_OP_EQ) {
@@ -814,6 +825,11 @@ Val eval(EvalCtx *ctx, AST *n) {
 			if (n->as.func_call.var.uid != 0) {
 				eval_stack_push_scope(ctx);
 
+				da_append(&ctx->call_stack, ((FuncCall){
+					.loc = n->loc,
+					.name = n->as.func_call.var.id,
+				}));
+
 				AST *func_def = eval_stack_get(
 					ctx, n->loc,
 					n->as.func_call.var)
@@ -883,7 +899,6 @@ Val eval(EvalCtx *ctx, AST *n) {
 			} else {
 				RegSymbol *rf = RegSymbols_get(&ctx->reg_sbls, n->as.func_call.var.id);
 				bool err = false;
-
 				if (!rf) {
 					err = true;
 				} else if (rf->kind != REG_FUNC) {
@@ -1160,4 +1175,5 @@ void eval_free(EvalCtx *ctx) {
 	RegSymbols_free(&ctx->reg_sbls);
 	da_free(&ctx->var_stack);
 	da_free(&ctx->temp_stack);
+	da_free(&ctx->call_stack);
 }

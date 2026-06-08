@@ -101,6 +101,7 @@ struct EvalCtx {
 	RegSymbols reg_sbls;
 	DA(EvalVar) var_stack;
 	DA(Val) temp_stack;
+	CallStack call_stack;
 	ErrorCtx err_ctx;
 };
 

@@ -91,14 +91,14 @@ EpslVal TextFileRead(EpslEvalCtx *ctx, EpslLocation cloc, EpslVals args) {
 	return txt;
 }
 
-void print_error(EpslLocation loc, EpslErrorKind ek, char *msg) {
-	size_t lines_num = loc.line_num + 1;
-	size_t chars_num = loc.line_char - loc.line_start + 1;
+void print_error(EpslCallStack *cs, EpslLocation loc, EpslErrorKind ek, char *msg) {
+	size_t line_num = loc.line_num + 1;
+	size_t char_num = loc.line_char - loc.line_start + 1;
 	const char *err_type =
 		ek == EPSL_ERROR_COMPTIME ? "comptime error:" :
 		ek == EPSL_ERROR_RUNTIME  ? "runtime error:"  : "";
 
-	printf("\n%s:%zu:%zu: %s %s\n", loc.file, lines_num, chars_num, err_type, msg);
+	printf("\n%s:%zu:%zu: %s %s\n", loc.file, line_num, char_num, err_type, msg);
 
 	loc.line_char = loc.line_start;
 	char err_ptr[512];
@@ -106,7 +106,7 @@ void print_error(EpslLocation loc, EpslErrorKind ek, char *msg) {
 
 	while (*loc.line_char != '\n' && *loc.line_char != '\0'){
 		printf("%c", *loc.line_char);
-		if (cnt < chars_num - 1) {
+		if (cnt < char_num - 1) {
 			if (*loc.line_char != '\t') {
 				err_ptr[cnt++] = ' ';
 			} else {
@@ -121,6 +121,17 @@ void print_error(EpslLocation loc, EpslErrorKind ek, char *msg) {
 	err_ptr[cnt++] = '^';
 	err_ptr[cnt] = '\0';
 	printf("%s\n", err_ptr);
+
+	if (!cs) return;
+	if (cs->count == 1) return;
+
+	for (int i = (int)cs->count - 1; i >= 0; i--) {
+		char *func_name = cs->items[i].name;
+		EpslLocation loc = cs->items[i].loc;
+		size_t ln = loc.line_num + 1;
+		size_t cn = loc.line_char - loc.line_start + 1;
+		printf(" at %s (%s:%zu:%zu)\n", func_name, loc.file, ln, cn);
+	}
 }
 
 void print_usage() {

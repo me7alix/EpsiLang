@@ -9,7 +9,7 @@
 
 void parser_error(Parser *p, Location loc, char *msg) {
 	p->err_ctx.got_err = true;
-	p->err_ctx.errf(loc, ERROR_COMPTIME, msg);
+	p->err_ctx.errf(NULL, loc, ERROR_COMPTIME, msg);
 }
 
 static size_t stack_ptrs[256];
@@ -881,9 +881,11 @@ AST *scope_body(Parser *p, bool isProg, bool skipScope) {
 }
 
 AST *parse(Parser *p) {
-	AST *prog = ast(p, .kind = AST_PROG);
-	prog->as.prog.body = scope_body(p, true, false);
-	return prog;
+	return ast(p,
+		.kind = AST_PROG,
+		.loc = peek(p).loc,
+		.as.prog.body = scope_body(p, true, false)
+	);
 }
 
 void parser_free(Parser *p) {

@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include "../3dparty/cplus.h"
 
 typedef struct {
 	char *file;
@@ -12,12 +13,23 @@ typedef struct {
 	char *line_char;
 } Location;
 
+typedef struct {
+	char *name;
+	Location loc;
+} FuncCall;
+
+typedef DA(FuncCall) CallStack;
+
 typedef enum {
 	ERROR_COMPTIME,
 	ERROR_RUNTIME,
 } ErrorKind;
 
-typedef void (*ErrorFn)(Location loc, ErrorKind ek, char *msg);
+typedef void (*ErrorFn)(
+	CallStack *cs,
+	Location loc,
+	ErrorKind ek,
+	char *msg);
 
 typedef struct {
 	ErrorFn errf;
