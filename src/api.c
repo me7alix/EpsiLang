@@ -70,11 +70,6 @@ EpslResult epsl_eval(EpslCtx *ctx) {
 	if (r->parser.err_ctx.got_err)
 		return (EpslResult){.got_err = true};
 
-	da_append(&r->eval_ctx.call_stack, ((FuncCall){
-		.loc = ast->loc,
-		.name = "[main]",
-	}));
-
 	EpslVal erv;
 	Val rv = eval(&r->eval_ctx, ast);
 	if (r->eval_ctx.err_ctx.got_err)

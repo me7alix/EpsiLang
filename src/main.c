@@ -123,8 +123,6 @@ void print_error(EpslCallStack *cs, EpslLocation loc, EpslErrorKind ek, char *ms
 	printf("%s\n", err_ptr);
 
 	if (!cs) return;
-	if (cs->count == 1) return;
-
 	for (int i = (int)cs->count - 1; i >= 0; i--) {
 		char *func_name = cs->items[i].name;
 		EpslLocation loc = cs->items[i].loc;
