@@ -644,16 +644,16 @@ error:
 }
 
 void reg_types(EvalCtx *ctx) {
-	eval_reg_var(ctx, "_TYPE_NONE_",   (Val){.kind = VAL_INT, .as.vint = VAL_NONE  });
-	eval_reg_var(ctx, "_TYPE_INT_",    (Val){.kind = VAL_INT, .as.vint = VAL_INT   });
-	eval_reg_var(ctx, "_TYPE_BOOL_",   (Val){.kind = VAL_INT, .as.vint = VAL_BOOL  });
-	eval_reg_var(ctx, "_TYPE_FIELD_",  (Val){.kind = VAL_INT, .as.vint = VAL_FIELD });
-	eval_reg_var(ctx, "_TYPE_FLOAT_",  (Val){.kind = VAL_INT, .as.vint = VAL_FLOAT });
-	eval_reg_var(ctx, "_TYPE_LIST_",   (Val){.kind = VAL_INT, .as.vint = VAL_LIST  });
-	eval_reg_var(ctx, "_TYPE_DICT_",   (Val){.kind = VAL_INT, .as.vint = VAL_DICT  });
-	eval_reg_var(ctx, "_TYPE_STR_",    (Val){.kind = VAL_INT, .as.vint = VAL_STR   });
-	eval_reg_var(ctx, "_TYPE_RUNE_",   (Val){.kind = VAL_INT, .as.vint = VAL_RUNE  });
-	eval_reg_var(ctx, "_TYPE_CUSTOM_", (Val){.kind = VAL_INT, .as.vint = VAL_CUSTOM});
+	eval_reg_var(ctx, true, "_TYPE_NONE_",   (Val){.kind = VAL_INT, .as.vint = VAL_NONE  });
+	eval_reg_var(ctx, true, "_TYPE_INT_",    (Val){.kind = VAL_INT, .as.vint = VAL_INT   });
+	eval_reg_var(ctx, true, "_TYPE_BOOL_",   (Val){.kind = VAL_INT, .as.vint = VAL_BOOL  });
+	eval_reg_var(ctx, true, "_TYPE_FIELD_",  (Val){.kind = VAL_INT, .as.vint = VAL_FIELD });
+	eval_reg_var(ctx, true, "_TYPE_FLOAT_",  (Val){.kind = VAL_INT, .as.vint = VAL_FLOAT });
+	eval_reg_var(ctx, true, "_TYPE_LIST_",   (Val){.kind = VAL_INT, .as.vint = VAL_LIST  });
+	eval_reg_var(ctx, true, "_TYPE_DICT_",   (Val){.kind = VAL_INT, .as.vint = VAL_DICT  });
+	eval_reg_var(ctx, true, "_TYPE_STR_",    (Val){.kind = VAL_INT, .as.vint = VAL_STR   });
+	eval_reg_var(ctx, true, "_TYPE_RUNE_",   (Val){.kind = VAL_INT, .as.vint = VAL_RUNE  });
+	eval_reg_var(ctx, true, "_TYPE_CUSTOM_", (Val){.kind = VAL_INT, .as.vint = VAL_CUSTOM});
 }
 
 void reg_stdlib(EvalCtx *ctx) {

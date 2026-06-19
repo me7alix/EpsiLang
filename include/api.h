@@ -136,7 +136,7 @@ void epsl_print_ast(EpslCtx *ctx);
 void epsl_print_tokens(EpslCtx *ctx);
 
 /* Register a global variable in the interpreter */
-void epsl_reg_var(EpslCtx *ctx, const char *id, EpslVal val);
+void epsl_reg_var(EpslCtx *ctx, bool is_const, const char *id, EpslVal val);
 
 /* Register a native/runtime function in the interpreter */
 void epsl_reg_func(EpslCtx *ctx, const char *name, EpslRegFunc rf);

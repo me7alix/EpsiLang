@@ -65,7 +65,9 @@ void eval_stack_set(EvalCtx *ctx, Location loc, AST_Var var, Val val) {
 	if (var.id) {
 		RegSymbol *rs = RegSymbols_get(&ctx->reg_sbls, var.id);
 		if (rs) {
-			rs->as.var = val;
+			if (rs->as.var.is_const)
+				eval_error(ctx, loc, "cannot mutate constant");
+			rs->as.var.val = val;
 			return;
 		}
 	}
@@ -88,7 +90,7 @@ Val eval_stack_get(EvalCtx *ctx, Location loc, AST_Var var) {
 
 	if (var.id) {
 		RegSymbol *rs = RegSymbols_get(&ctx->reg_sbls, var.id);
-		if (rs) return rs->as.var;
+		if (rs) return rs->as.var.val;
 	}
 
 	eval_error(ctx, loc, "no such variable / function");
@@ -1143,10 +1145,11 @@ void eval_collect_garbage(EvalCtx *ctx) {
 	ctx->gc.to = temp;
 }
 
-void eval_reg_var(EvalCtx *ctx, const char *id, Val val) {
+void eval_reg_var(EvalCtx *ctx, bool is_const, const char *id, Val val) {
 	RegSymbols_add(&ctx->reg_sbls, (char*)id, (RegSymbol){
 		.kind = REG_VAR,
-		.as.var = val,
+		.as.var.is_const = is_const,
+		.as.var.val = val,
 	});
 }
 

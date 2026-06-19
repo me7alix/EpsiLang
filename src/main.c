@@ -156,7 +156,7 @@ void reg_platform(EpslCtx *ctx) {
 #endif
 
 	epsl_val_set_str(str, platform);
-	epsl_reg_var(ctx, "_OS_", str);
+	epsl_reg_var(ctx, true, "_OS_", str);
 }
 
 int main(int argc, char *argv[]) {
@@ -223,7 +223,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	reg_platform(ctx);
-	epsl_reg_var(ctx, "_OS_ARGS_", os_args);
+	epsl_reg_var(ctx, true, "_OS_ARGS_", os_args);
 
 	epsl_reg_func(ctx, "text_read",  TextFileRead);
 	epsl_reg_func(ctx, "text_write", TextFileWrite);

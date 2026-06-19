@@ -58,10 +58,10 @@ void epsl_reg_func(EpslCtx *ctx, const char *id, EpslRegFunc rf) {
 	eval_reg_func(&r->eval_ctx, id, (RegFunc) rf);
 }
 
-void epsl_reg_var(EpslCtx *ctx, const char *id, EpslVal val) {
+void epsl_reg_var(EpslCtx *ctx, bool is_const, const char *id, EpslVal val) {
 	EpslCtxR *r = ctx;
 	VAR_FROM(Val, ev, &val);
-	eval_reg_var(&r->eval_ctx, id, ev);
+	eval_reg_var(&r->eval_ctx, is_const, id, ev);
 }
 
 EpslResult epsl_eval(EpslCtx *ctx) {
