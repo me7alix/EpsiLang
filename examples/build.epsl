@@ -3,15 +3,14 @@ if _OS_ != "WINDOWS" and _OS_ != "LINUX" and _OS_ != "APPLE" {
 	exit(1);
 }
 
-if build_debug_mode ->
+if build_debug_mode do
 	println("DEBUG MODE");
 
 fn join(arr) {
 	res := "";
 	for i := 0; i < len(arr); i+=1 {
 		append(res, arr[i]);
-		if i < len(arr) - 1 ->
-			append(res, " ");
+		if i < len(arr) - 1 do append(res, " ");
 	}
 
 	return res;
@@ -24,10 +23,10 @@ fn path(...) {
 	for i := 0; i < len(_VA_ARGS_); i+=1 {
 		append(res, _VA_ARGS_[i]);
 
-		if _OS_ == "LINUX" or _OS_ == "APPLE" -> del = "/";
-		else if _OS_ == "WINDOWS"             -> del = "\\";
+		if _OS_ == "LINUX" or _OS_ == "APPLE" do del = "/";
+		else if _OS_ == "WINDOWS"             do del = "\\";
 
-		if i < len(_VA_ARGS_) - 1 ->
+		if i < len(_VA_ARGS_) - 1 do
 			append(res, del);
 	}
 

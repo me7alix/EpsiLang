@@ -21,7 +21,7 @@ for i := fromY; i < toY; i += stepY {
 			z_r = tmp_r;
 			z_i = tmp_i;
 
-			if z_i * z_i + z_r * z_r > 4 -> break;
+			if z_i * z_i + z_r * z_r > 4 do break;
 		}
 
 		cg := int(iter / iters * (len(grad) - 1));

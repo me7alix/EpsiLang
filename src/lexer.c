@@ -103,6 +103,7 @@ struct {
 	{ "fn",       TOK_FUNC      },
 	{ "in",       TOK_IN        },
 	{ "or",       TOK_OR        },
+	{ "do",       TOK_ARROW     },
 	{ "and",      TOK_AND       },
 	{ "none",     TOK_NONE      },
 };
@@ -149,9 +150,6 @@ Token lexer_next(Lexer *l) {
 		case '-': {
 			if (chl(l)[1] == '=') {
 				ret = token(l, TOK_MINUS_EQ, "-=");
-				chn(l);
-			} else if (chl(l)[1] == '>') {
-				ret = token(l, TOK_ARROW, "->");
 				chn(l);
 			} else ret = token(l, TOK_MINUS, "-");
 		} break;

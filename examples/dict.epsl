@@ -21,6 +21,6 @@ println(dict);
 
 while true {
 	key := input("enter digit key: ");
-	if has(dict, key) -> println("digit: ", str(dict[key]));
-	else              -> println("no such digit");
+	if has(dict, key) do println("digit: ", str(dict[key]));
+	else              do println("no such digit");
 }

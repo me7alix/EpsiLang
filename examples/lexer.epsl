@@ -46,20 +46,20 @@ fn lexer_next(l) {
 		return lexer_next(l);
 	}
 
-	else if ch == '\0' -> res = token(.EOF,   "");
-	else if ch == '+'  -> res = token(.PLUS,  "+");
-	else if ch == '-'  -> res = token(.MINUS, "-");
-	else if ch == '*'  -> res = token(.STAR,  "*");
-	else if ch == '/'  -> res = token(.SLASH, "/");
+	else if ch == '\0' do res = token(.EOF,   "");
+	else if ch == '+'  do res = token(.PLUS,  "+");
+	else if ch == '-'  do res = token(.MINUS, "-");
+	else if ch == '*'  do res = token(.STAR,  "*");
+	else if ch == '/'  do res = token(.SLASH, "/");
 
 	else if is_digit(ch) {
 		digits := "";
-		while is_digit(lexer_chp(l)) ->
+		while is_digit(lexer_chp(l)) do
 			append(digits, lexer_chn(l));
 		return token(.INT, int(digits));
 	} else if is_ident(ch) {
 		ident := "";
-		while is_ident(lexer_chp(l)) ->
+		while is_ident(lexer_chp(l)) do
 			append(ident, lexer_chn(l));
 		return token(.IDENT, ident);
 	}
@@ -84,5 +84,5 @@ fn lexer_peek2(l) {
 }
 
 lex := lexer_new(input("Enter expression: "));
-while lexer_peek(lex).kind != .EOF ->
+while lexer_peek(lex).kind != .EOF do
 	println(lexer_next(lex));

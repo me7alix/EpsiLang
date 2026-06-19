@@ -13,7 +13,7 @@ insert(nums, 0, 101);
 println(nums);
 
 print("{ ");
-for n in nums ->
+for n in nums do
 	print(n, " ");
 println("}");
 
