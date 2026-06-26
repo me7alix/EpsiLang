@@ -213,14 +213,11 @@ Token lexer_next(Lexer *l) {
 
 		case '\r':
 		case '\n': {
-			if (chl(l)[0] == '\r' && chl(l)[1] == '\n') {
+			if (chl(l)[0] == '\r' && chl(l)[1] == '\n')
 				chn(l);
-			}
-
 			chn(l);
 			l->cur_loc.line_num++;
-			l->cur_loc.line_start = chl(l) + 1;
-
+			l->cur_loc.line_start = chl(l);
 			return lexer_next(l);
 		} break;
 
