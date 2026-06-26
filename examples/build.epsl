@@ -1,3 +1,5 @@
+build_debug_mode; // when true, doesn't execute commands
+
 if _OS_ != "WINDOWS" and _OS_ != "LINUX" and _OS_ != "APPLE" {
 	println("OS is not supported");
 	exit(1);
