@@ -3,8 +3,6 @@
 #include <stdlib.h>
 #include "../include/eval.h"
 
-#define bstr(b) (b ? "true" : "false")
-
 #define err(ec, loc, msg) \
 	do { \
 		(ec)->err_ctx.got_err = true; \
@@ -17,7 +15,10 @@ void val_sprint(Val v, StringBuilder *sb, int depth) {
 	case VAL_NONE:  sb_appendf(sb, "none");                 break;
 	case VAL_INT:   sb_appendf(sb, "%lli", v.as.vint);      break;
 	case VAL_FLOAT: sb_appendf(sb, "%lf", v.as.vfloat);     break;
-	case VAL_BOOL:  sb_appendf(sb, "%s", bstr(v.as.vbool)); break;
+
+	case VAL_BOOL:
+		sb_appendf(sb, "%s", v.as.vbool ? "true" : "false");
+		break;
 
 	case VAL_CUSTOM:
 		sb_appendf(sb, "CUSTOM(%d)", ((EvalCustomObj*)(v.as.gc_obj->data))->kind);
@@ -30,53 +31,49 @@ void val_sprint(Val v, StringBuilder *sb, int depth) {
 		break;
 
 	case VAL_FIELD:
-		if (depth == 0)
+		if (depth == 0) {
 			sb_appendf(sb, "%s", v.as.field);
-		else
+		} else {
 			sb_appendf(sb, ".%s", v.as.field);
-		break;
+		} break;
 
 	case VAL_STR:
-		if (depth == 0)
+		if (depth == 0) {
 			sb_appendf(sb, "%s", VSTR(v)->items);
-		else
+		} else {
 			sb_appendf(sb, "\"%s\"", VSTR(v)->items);
-		break;
+		} break;
 
 	case VAL_LIST: {
 		sb_appendf(sb, "[");
-
 		da_foreach (Val, it, VLIST(v)) {
 			val_sprint(*it, sb, depth + 1);
-			if (it - VLIST(v)->items != VLIST(v)->count - 1)
+			if (it - VLIST(v)->items != VLIST(v)->count - 1) {
 				sb_appendf(sb, ", ");
+			}
 		}
-
 		sb_appendf(sb, "]");
 	} break;
 
-	case VAL_DICT: {
+	case VAL_DICT:
 		ValDict *dict = VDICT(v);
 		size_t count = 0;
-
 		sb_appendf(sb, "{");
 		ht_foreach_node (ValDict, dict, kv) {
 			val_sprint(kv->key, sb, depth + 1);
 			sb_appendf(sb, ": ");
 			val_sprint(kv->val, sb, depth + 1);
-			if (count++ < dict->count - 1)
+			if (count++ < dict->count - 1) {
 				sb_appendf(sb, ", ");
+			}
 		}
-
 		sb_appendf(sb, "}");
-		} break;
 	}
 }
 
 void JsonDeserializeF(
 	StringBuilder *sb,
 	Val v,
-
 	long long intend,
 	long long spaces
 ) {
@@ -87,8 +84,11 @@ void JsonDeserializeF(
 	case VAL_NONE:  sb_appendf(sb, "null");                   break;
 	case VAL_INT:   sb_appendf(sb, "%lli", v.as.vint);        break;
 	case VAL_FLOAT: sb_appendf(sb, "%lf", v.as.vfloat);       break;
-	case VAL_BOOL:  sb_appendf(sb, "%s", bstr(v.as.vbool));   break;
 	case VAL_STR:   sb_appendf(sb, "\"%s\"", VSTR(v)->items); break;
+
+	case VAL_BOOL:
+		sb_appendf(sb, "%s", v.as.vbool ? "true" : "false");
+		break;
 
 	case VAL_LIST: {
 		intend += spaces;
@@ -121,7 +121,6 @@ void JsonDeserializeF(
 		sb_appendf(sb, "{");
 		if (spaces != 0)
 			sb_appendf(sb, "\n");
-
 
 		ht_foreach_node (ValDict, dict, kv) {
 			ADD_INTENDATION();
@@ -615,16 +614,13 @@ Val Has(EvalCtx *ctx, Location cloc, Vals args) {
 		goto error;
 
 	bool res = false;
-
 	if (args.items[0].kind == VAL_DICT) {
 		ValDict *dict = VDICT(args.items[0]);
 		Val key = args.items[1];
-
 		res = ValDict_get(dict, key) != NULL;
 	} else if (args.items[0].kind == VAL_LIST) {
 		Vals *list = VLIST(args.items[0]);
 		Val key = args.items[1];
-
 		da_foreach (Val, v, list) {
 			if (ValDict_compare(*v, key) == 0) {
 				res = true;
@@ -643,21 +639,23 @@ error:
 	return VNONE;
 }
 
-void reg_types(EvalCtx *ctx) {
-	eval_reg_var(ctx, true, "_TYPE_NONE_",   (Val){.kind = VAL_INT, .as.vint = VAL_NONE  });
-	eval_reg_var(ctx, true, "_TYPE_INT_",    (Val){.kind = VAL_INT, .as.vint = VAL_INT   });
-	eval_reg_var(ctx, true, "_TYPE_BOOL_",   (Val){.kind = VAL_INT, .as.vint = VAL_BOOL  });
-	eval_reg_var(ctx, true, "_TYPE_FIELD_",  (Val){.kind = VAL_INT, .as.vint = VAL_FIELD });
-	eval_reg_var(ctx, true, "_TYPE_FLOAT_",  (Val){.kind = VAL_INT, .as.vint = VAL_FLOAT });
-	eval_reg_var(ctx, true, "_TYPE_LIST_",   (Val){.kind = VAL_INT, .as.vint = VAL_LIST  });
-	eval_reg_var(ctx, true, "_TYPE_DICT_",   (Val){.kind = VAL_INT, .as.vint = VAL_DICT  });
-	eval_reg_var(ctx, true, "_TYPE_STR_",    (Val){.kind = VAL_INT, .as.vint = VAL_STR   });
-	eval_reg_var(ctx, true, "_TYPE_RUNE_",   (Val){.kind = VAL_INT, .as.vint = VAL_RUNE  });
-	eval_reg_var(ctx, true, "_TYPE_CUSTOM_", (Val){.kind = VAL_INT, .as.vint = VAL_CUSTOM});
-}
-
 void reg_stdlib(EvalCtx *ctx) {
-	reg_types(ctx);
+#define REGTYPE(name, knd)               \
+	eval_reg_var(ctx, true, name, (Val){ \
+		.kind = VAL_INT,                 \
+		.as.vint = (knd)                 \
+	});
+	REGTYPE("_TYPE_NONE_",   VAL_NONE);
+	REGTYPE("_TYPE_INT_",    VAL_INT);
+	REGTYPE("_TYPE_BOOL_",   VAL_BOOL);
+	REGTYPE("_TYPE_FIELD_",  VAL_FIELD);
+	REGTYPE("_TYPE_FLOAT_",  VAL_FLOAT);
+	REGTYPE("_TYPE_LIST_",   VAL_LIST);
+	REGTYPE("_TYPE_DICT_",   VAL_DICT);
+	REGTYPE("_TYPE_STR_",    VAL_STR);
+	REGTYPE("_TYPE_RUNE_",   VAL_RUNE);
+	REGTYPE("_TYPE_CUSTOM_", VAL_CUSTOM);
+#undef REGTYPE
 
 	eval_reg_func(ctx, "json_serialize",   JsonSerialize);
 	eval_reg_func(ctx, "json_deserialize", JsonDeserialize);

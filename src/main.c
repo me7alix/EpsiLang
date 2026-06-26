@@ -99,12 +99,15 @@ void print_error(EpslCallStack *cs, EpslLocation loc, EpslErrorKind ek, char *ms
 		ek == EPSL_ERROR_RUNTIME  ? "runtime error:"  : "";
 
 	printf("\n%s:%zu:%zu: %s %s\n", loc.file, line_num, char_num, err_type, msg);
-
 	loc.line_char = loc.line_start;
+
 	char err_ptr[512];
 	size_t cnt = 0;
 
-	while (*loc.line_char != '\n' && *loc.line_char != '\0'){
+	while (
+		*loc.line_char != '\n' &&
+		*loc.line_char != '\0'
+	) {
 		printf("%c", *loc.line_char);
 		if (cnt < char_num - 1) {
 			if (*loc.line_char != '\t') {
@@ -113,7 +116,6 @@ void print_error(EpslCallStack *cs, EpslLocation loc, EpslErrorKind ek, char *ms
 				err_ptr[cnt++] = '\t';
 			}
 		}
-
 		loc.line_char++;
 	}
 
