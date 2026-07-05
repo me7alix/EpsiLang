@@ -5,7 +5,7 @@ toY   := 1.1;
 stepX := 0.032;
 stepY := 0.075;
 
-grad := [" ", ".", ",", ":", ";", "i", "l", "o", "x", "O", "#", "@"];
+grad := list(" .,:;iloxO#@");
 
 for i := fromY; i < toY; i += stepY {
 	for j := fromX; j < toX; j += stepX {
@@ -24,8 +24,8 @@ for i := fromY; i < toY; i += stepY {
 			if z_i * z_i + z_r * z_r > 4 do break;
 		}
 
-		cg := int(iter / iters * (len(grad) - 1));
-		print(grad[cg]);
+		idx := int(iter / iters * (len(grad) - 1));
+		print(grad[idx]);
 	}
 
 	print("\n");
