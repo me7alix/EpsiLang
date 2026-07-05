@@ -27,8 +27,11 @@ void val_sprint(Val v, StringBuilder *sb, int depth) {
 	case VAL_RUNE:
 		char out[4];
 		int n = utf8_encode(v.as.vrune, out);
-		sb_appendf(sb, "%.*s", n, out);
-		break;
+		if (depth == 0) {
+			sb_appendf(sb, "%.*s", n, out);
+		} else {
+			sb_appendf(sb, "'%.*s'", n, out);
+		} break;
 
 	case VAL_FIELD:
 		if (depth == 0) {
@@ -609,6 +612,36 @@ Val Typeof(EvalCtx *ctx, Location cloc, Vals args) {
 	};
 }
 
+Val List(EvalCtx *ctx, Location cloc, Vals args) {
+	if (args.count != 1)
+		goto error;
+
+	Val list = eval_make_val(ctx, VAL_LIST);
+	if (args.items[0].kind == VAL_DICT) {
+		ValDict *dict = VDICT(args.items[0]);
+		ht_foreach_node (ValDict, dict, n) {
+			da_append(VLIST(list), n->key);
+		}
+	} else if (args.items[0].kind == VAL_STR) {
+		char *s = VSTR(args.items[0])->items;
+		while (*s) {
+			size_t bytes;
+			UTF8_Rune cp = utf8_decode(s, &bytes);
+			s += bytes;
+			da_append(VLIST(list), ((Val){
+				.kind = VAL_RUNE,
+				.as.vrune = cp,
+			}));
+		}
+	} else goto error;
+	return list;
+
+error:
+	err(ctx, cloc, "accepts: dictionary or string");
+	return VNONE;
+}
+
+
 Val Has(EvalCtx *ctx, Location cloc, Vals args) {
 	if (args.count != 2)
 		goto error;
@@ -660,6 +693,7 @@ void reg_stdlib(EvalCtx *ctx) {
 	eval_reg_func(ctx, "json_serialize",   JsonSerialize);
 	eval_reg_func(ctx, "json_deserialize", JsonDeserialize);
 
+	eval_reg_func(ctx, "list",    List);
 	eval_reg_func(ctx, "len",     Len);
 	eval_reg_func(ctx, "int",     Int);
 	eval_reg_func(ctx, "split",   Split);
