@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 #include "../include/eval.h"
 
 #define err(ec, loc, msg) \
@@ -321,6 +322,131 @@ Val BitXor(EvalCtx *ctx, Location cloc, Vals args) {
 		.kind = VAL_INT,
 		.as.vint = args.items[0].as.vint ^ args.items[1].as.vint,
 	};
+}
+
+Val Sin(EvalCtx *ctx, Location cloc, Vals args) {
+	if (args.count != 1) err(ctx, cloc, "accepts only 1 argument");
+	if (args.items[0].kind != VAL_FLOAT) err(ctx, cloc, "accepts only float");
+	return (Val){
+		.kind = VAL_FLOAT,
+		.as.vfloat = sin(args.items[0].as.vfloat),
+	};
+}
+
+Val Cos(EvalCtx *ctx, Location cloc, Vals args) {
+	if (args.count != 1) err(ctx, cloc, "accepts only 1 argument");
+	if (args.items[0].kind != VAL_FLOAT) err(ctx, cloc, "accepts only float");
+	return (Val){
+		.kind = VAL_FLOAT,
+		.as.vfloat = cos(args.items[0].as.vfloat),
+	};
+}
+
+Val Sqrt(EvalCtx *ctx, Location cloc, Vals args) {
+	if (args.count != 1) err(ctx, cloc, "accepts only 1 argument");
+	if (args.items[0].kind != VAL_FLOAT) err(ctx, cloc, "accepts only float");
+	return (Val){
+		.kind = VAL_FLOAT,
+		.as.vfloat = sqrt(args.items[0].as.vfloat),
+	};
+}
+
+Val Pow(EvalCtx *ctx, Location cloc, Vals args) {
+	if (args.count != 1) err(ctx, cloc, "accepts only 2 argument");
+	if (args.items[0].kind != VAL_FLOAT || args.items[1].kind != VAL_FLOAT)
+		err(ctx, cloc, "accepts only floats");
+	return (Val){
+		.kind = VAL_FLOAT,
+		.as.vint = pow(args.items[0].as.vfloat, args.items[1].as.vfloat),
+	};
+}
+
+Val Floor(EvalCtx *ctx, Location cloc, Vals args) {
+	if (args.count != 1)
+		err(ctx, cloc, "accepts only 1 argument");
+
+	if (args.items[0].kind != VAL_FLOAT)
+		err(ctx, cloc, "accepts only float");
+
+	return (Val){
+		.kind = VAL_INT,
+		.as.vint = floor(args.items[0].as.vfloat),
+	};
+}
+
+Val Ceil(EvalCtx *ctx, Location cloc, Vals args) {
+	if (args.count != 1)
+		err(ctx, cloc, "accepts only 1 argument");
+
+	if (args.items[0].kind != VAL_FLOAT)
+		err(ctx, cloc, "accepts only float");
+
+	return (Val){
+		.kind = VAL_INT,
+		.as.vint = ceil(args.items[0].as.vfloat),
+	};
+}
+
+Val Max(EvalCtx *ctx, Location cloc, Vals args) {
+	if (args.count == 2) {
+		if (args.items[0].kind == VAL_INT && args.items[1].kind == VAL_INT) {
+			return (Val){
+				.kind = VAL_INT,
+				.as.vint = args.items[0].as.vint > args.items[1].as.vint ?
+					args.items[0].as.vint : args.items[1].as.vint,
+			};
+		} if (args.items[0].kind == VAL_INT && args.items[1].kind == VAL_FLOAT) {
+			return (Val){
+				.kind = VAL_FLOAT,
+				.as.vfloat = args.items[0].as.vint > args.items[1].as.vfloat ?
+					args.items[0].as.vint : args.items[1].as.vfloat,
+			};
+		} if (args.items[0].kind == VAL_FLOAT && args.items[1].kind == VAL_INT) {
+			return (Val){
+				.kind = VAL_FLOAT,
+				.as.vfloat = args.items[0].as.vfloat > args.items[1].as.vint ?
+					args.items[0].as.vfloat : args.items[1].as.vint,
+			};
+		} if (args.items[0].kind == VAL_FLOAT && args.items[1].kind == VAL_FLOAT) {
+			return (Val){
+				.kind = VAL_FLOAT,
+				.as.vfloat = args.items[0].as.vfloat > args.items[1].as.vfloat ?
+					args.items[0].as.vfloat : args.items[1].as.vfloat,
+			};
+		}
+	}
+	err(ctx, cloc, "accepts 2 numbers");
+}
+
+Val Min(EvalCtx *ctx, Location cloc, Vals args) {
+	if (args.count == 2) {
+		if (args.items[0].kind == VAL_INT && args.items[1].kind == VAL_INT) {
+			return (Val){
+				.kind = VAL_INT,
+				.as.vint = args.items[0].as.vint < args.items[1].as.vint ?
+					args.items[0].as.vint : args.items[1].as.vint,
+			};
+		} if (args.items[0].kind == VAL_INT && args.items[1].kind == VAL_FLOAT) {
+			return (Val){
+				.kind = VAL_FLOAT,
+				.as.vfloat = args.items[0].as.vint < args.items[1].as.vfloat ?
+					args.items[0].as.vint : args.items[1].as.vfloat,
+			};
+		} if (args.items[0].kind == VAL_FLOAT && args.items[1].kind == VAL_INT) {
+			return (Val){
+				.kind = VAL_FLOAT,
+				.as.vfloat = args.items[0].as.vfloat < args.items[1].as.vint ?
+					args.items[0].as.vfloat : args.items[1].as.vint,
+			};
+		} if (args.items[0].kind == VAL_FLOAT && args.items[1].kind == VAL_FLOAT) {
+			return (Val){
+				.kind = VAL_FLOAT,
+				.as.vfloat = args.items[0].as.vfloat < args.items[1].as.vfloat ?
+					args.items[0].as.vfloat : args.items[1].as.vfloat,
+			};
+		}
+	}
+	err(ctx, cloc, "accepts 2 numbers");
 }
 
 Val Split(EvalCtx *ctx, Location cloc, Vals args) {
@@ -690,12 +816,24 @@ void reg_stdlib(EvalCtx *ctx) {
 	REGTYPE("_TYPE_CUSTOM_", VAL_CUSTOM);
 #undef REGTYPE
 
+	eval_reg_var(ctx, true, "PI", (Val){
+		.kind = VAL_FLOAT,
+		.as.vfloat = 3.141592653589,
+	});
+
 	eval_reg_func(ctx, "json_serialize",   JsonSerialize);
 	eval_reg_func(ctx, "json_deserialize", JsonDeserialize);
 
 	eval_reg_func(ctx, "list",    List);
 	eval_reg_func(ctx, "len",     Len);
 	eval_reg_func(ctx, "int",     Int);
+	eval_reg_func(ctx, "min",     Min);
+	eval_reg_func(ctx, "max",     Max);
+	eval_reg_func(ctx, "cos",     Cos);
+	eval_reg_func(ctx, "sin",     Sin);
+	eval_reg_func(ctx, "floor",   Floor);
+	eval_reg_func(ctx, "ceil",    Ceil);
+	eval_reg_func(ctx, "sqrt",    Sqrt);
 	eval_reg_func(ctx, "split",   Split);
 	eval_reg_func(ctx, "bitxor",  BitXor);
 	eval_reg_func(ctx, "rune",    Rune);
