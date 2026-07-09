@@ -1,26 +1,26 @@
 fn lexer_new(str) {
 	return {
-		.char_stream = str,
-		.cur_tok = 0,
+		.stream = str,
+		.count = 0,
 	};
 }
 
 fn lexer_chp(l) {
-	if l.cur_tok >= len(l.char_stream) => '\0';
-	return l.char_stream[l.cur_tok];
+	if l.count >= len(l.stream) => '\0';
+	return l.stream[l.count];
 }
 
 fn lexer_chn(l) {
 	s := lexer_chp(l);
-	l.cur_tok += 1;
+	l.count += 1;
 	return s;
 }
 
 fn lexer_chp2(l) {
-	saved := l.cur_tok;
+	saved := l.count;
 	lexer_chn(l);
 	ch := lexer_chp(l);
-	l.cur_tok = saved;
+	l.count = saved;
 	return ch;
 }
 
@@ -35,7 +35,9 @@ fn is_digit(ch) =>
 	ch >= '0' and ch <= '9';
 
 fn is_ident(ch) =>
-	ch == '_' or (ch >= 'a' and ch <= 'z') or (ch >= 'A' and ch <= 'Z');
+	ch == '_' or
+	(ch >= 'a' and ch <= 'z') or
+	(ch >= 'A' and ch <= 'Z');
 
 fn lexer_next(l) {
 	ch := lexer_chp(l);
@@ -69,17 +71,17 @@ fn lexer_next(l) {
 }
 
 fn lexer_peek(l) {
-	saved := l.cur_tok;
+	saved := l.count;
 	tok := lexer_next(l);
-	l.cur_tok = saved;
+	l.count = saved;
 	return tok;
 }
 
 fn lexer_peek2(l) {
-	saved := l.cur_tok;
+	saved := l.count;
 	lexer_next(l);
 	tok := lexer_next(l);
-	l.cur_tok = saved;
+	l.count = saved;
 	return tok;
 }
 
