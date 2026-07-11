@@ -311,6 +311,19 @@ Val JsonSerialize(EvalCtx *ctx, Location cloc, Vals args) {
 	return json_obj(&jctx, res);
 }
 
+bool get_number(Val val, double *num) {
+	switch (val.kind) {
+	case VAL_FLOAT:
+		*num = val.as.vfloat;
+		return true;
+	case VAL_INT:
+		*num = val.as.vint;
+		return true;
+	default:
+		return false;
+	}
+}
+
 Val BitXor(EvalCtx *ctx, Location cloc, Vals args) {
 	if (args.count != 2)
 		err(ctx, cloc, "accepts only 2 argument");
@@ -325,39 +338,50 @@ Val BitXor(EvalCtx *ctx, Location cloc, Vals args) {
 }
 
 Val Sin(EvalCtx *ctx, Location cloc, Vals args) {
-	if (args.count != 1) err(ctx, cloc, "accepts only 1 argument");
-	if (args.items[0].kind != VAL_FLOAT) err(ctx, cloc, "accepts only float");
+	if (args.count != 1)
+		err(ctx, cloc, "accepts only 1 argument");
+	double number;
+	if (!get_number(args.items[0], &number))
+		err(ctx, cloc, "accepts only number");
 	return (Val){
 		.kind = VAL_FLOAT,
-		.as.vfloat = sin(args.items[0].as.vfloat),
+		.as.vfloat = sin(number),
 	};
 }
 
 Val Cos(EvalCtx *ctx, Location cloc, Vals args) {
-	if (args.count != 1) err(ctx, cloc, "accepts only 1 argument");
-	if (args.items[0].kind != VAL_FLOAT) err(ctx, cloc, "accepts only float");
+	if (args.count != 1)
+		err(ctx, cloc, "accepts only 1 argument");
+	double number;
+	if (!get_number(args.items[0], &number))
+		err(ctx, cloc, "accepts only number");
 	return (Val){
 		.kind = VAL_FLOAT,
-		.as.vfloat = cos(args.items[0].as.vfloat),
+		.as.vfloat = cos(number),
 	};
 }
 
 Val Sqrt(EvalCtx *ctx, Location cloc, Vals args) {
-	if (args.count != 1) err(ctx, cloc, "accepts only 1 argument");
-	if (args.items[0].kind != VAL_FLOAT) err(ctx, cloc, "accepts only float");
+	if (args.count != 1)
+		err(ctx, cloc, "accepts only 1 argument");
+	double number;
+	if (!get_number(args.items[0], &number))
+		err(ctx, cloc, "accepts only number");
 	return (Val){
 		.kind = VAL_FLOAT,
-		.as.vfloat = sqrt(args.items[0].as.vfloat),
+		.as.vfloat = sqrt(number),
 	};
 }
 
 Val Pow(EvalCtx *ctx, Location cloc, Vals args) {
-	if (args.count != 1) err(ctx, cloc, "accepts only 2 argument");
-	if (args.items[0].kind != VAL_FLOAT || args.items[1].kind != VAL_FLOAT)
-		err(ctx, cloc, "accepts only floats");
+	if (args.count != 2)
+		err(ctx, cloc, "accepts only 2 argument");
+	double number1, number2;
+	if (!get_number(args.items[0], &number1) || !get_number(args.items[1], &number2))
+		err(ctx, cloc, "accepts only numbers");
 	return (Val){
 		.kind = VAL_FLOAT,
-		.as.vint = pow(args.items[0].as.vfloat, args.items[1].as.vfloat),
+		.as.vfloat = pow(number1, number2),
 	};
 }
 
@@ -827,6 +851,7 @@ void reg_stdlib(EvalCtx *ctx) {
 	eval_reg_func(ctx, "list",    List);
 	eval_reg_func(ctx, "len",     Len);
 	eval_reg_func(ctx, "int",     Int);
+	eval_reg_func(ctx, "pow",     Pow);
 	eval_reg_func(ctx, "min",     Min);
 	eval_reg_func(ctx, "max",     Max);
 	eval_reg_func(ctx, "cos",     Cos);
