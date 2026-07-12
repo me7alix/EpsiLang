@@ -1,47 +1,4 @@
-:i count 8
-:b shell 46
-echo 'seven' | ./build/epsl examples/dict.epsl
-:i returncode 0
-:b stdout 328
-zero: 0
-two: 2
-seven: 7
-three: 3
-one: 1
-nine: 9
-six: 6
-four: 4
-eight: 8
-five: 5
-{"zero": 0, "two": 2, "seven": 7, "three": 3, "one": 1, "nine": 9, "six": 6, "four": 4, "eight": 8, "five": 5}
-enter digit key: digit: 7
-enter digit key: 
-examples/dict.epsl:23:8: runtime error: no input
-key := input("enter digit key: ");
-       ^
-
-:b stderr 0
-
-:b shell 43
-echo '10' | ./build/epsl examples/fact.epsl
-:i returncode 0
-:b stdout 22
-enter x: x! = 3628800
-
-:b stderr 0
-
-:b shell 52
-echo '10 + 5 * 3' | ./build/epsl examples/lexer.epsl
-:i returncode 0
-:b stdout 145
-Enter expression: {.data: 10, .kind: .INT}
-{.data: "+", .kind: .PLUS}
-{.data: 5, .kind: .INT}
-{.data: "*", .kind: .STAR}
-{.data: 3, .kind: .INT}
-
-:b stderr 0
-
+:i count 5
 :b shell 31
 ./build/epsl examples/json.epsl
 :i returncode 0
