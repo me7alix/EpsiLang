@@ -10,3 +10,4 @@ println("Printing runes: ", str[0], str[1], 'и', 'в');
 println("'0' + 3 = ", "'", '0' + 3, "'", '\n');
 
 println(int(str[0]), ' ', int('П'));
+println(str[-1], str[-2]);

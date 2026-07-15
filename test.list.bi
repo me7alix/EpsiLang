@@ -221,7 +221,7 @@ Address:
 :b shell 32
 ./build/epsl examples/runes.epsl
 :i returncode 0
-:b stdout 140
+:b stdout 143
 Original string: Привет, Мир!
 Length: 12
 After changing: Привет, Мир?!
@@ -230,6 +230,7 @@ Printing runes: Прив
 '0' + 3 = '3'
 
 1055 1055
+!?
 
 :b stderr 0
 

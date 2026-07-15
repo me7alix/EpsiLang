@@ -3,4 +3,4 @@ jstr := "{\"users\":[{\"id\":1,\"name\":\"Alice\",\"email\":\"alice@example.com\
 obj := json_deserialize(jstr);
 println(json_serialize(obj.res, 4));
 println("\nfirst log message: ", obj.res["logs"][0]["message"]);
-println("\nlast order: ", json_serialize(obj.res["orders"][len(obj.res["orders"])-1], 4));
+println("\nlast order: ", json_serialize(obj.res["orders"][-1], 4));
