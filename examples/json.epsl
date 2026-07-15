@@ -1,6 +1,6 @@
 jstr := "{\"users\":[{\"id\":1,\"name\":\"Alice\",\"email\":\"alice@example.com\",\"roles\":[\"admin\",\"user\"],\"active\":true},{\"id\":2,\"name\":\"Bob\",\"email\":\"bob@example.com\",\"roles\":[\"user\"],\"active\":false},{\"id\":3,\"name\":\"Charlie\",\"email\":\"charlie@example.com\",\"roles\":[\"moderator\",\"user\"],\"active\":true}],\"products\":[{\"id\":101,\"name\":\"Laptop\",\"price\":999.99,\"tags\":[\"electronics\",\"computers\"]},{\"id\":102,\"name\":\"Phone\",\"price\":499.49,\"tags\":[\"electronics\",\"mobile\"]},{\"id\":103,\"name\":\"Keyboard\",\"price\":79.95,\"tags\":[\"peripherals\"]}],\"orders\":[{\"id\":5001,\"user_id\":1,\"items\":[{\"product_id\":101,\"qty\":1},{\"product_id\":103,\"qty\":2}],\"total\":1159.89},{\"id\":5002,\"user_id\":2,\"items\":[{\"product_id\":102,\"qty\":3}],\"total\":1498.47}],\"config\":{\"site_name\":\"Test Platform\",\"version\":\"1.0.0\",\"features\":{\"auth\":true,\"payments\":false,\"analytics\":true}},\"logs\":[{\"timestamp\":\"2026-01-01T10:00:00Z\",\"level\":\"info\",\"message\":\"System started\"},{\"timestamp\":\"2026-01-01T10:05:00Z\",\"level\":\"warn\",\"message\":\"High memory usage\"},{\"timestamp\":\"2026-01-01T10:10:00Z\",\"level\":\"error\",\"message\":\"Crash detected\"}],\"nested\":{\"level1\":{\"level2\":{\"level3\":{\"value\":\"deep\",\"array\":[1,2,3,{\"inner\":\"object\"}]}}}}}";
 
-obj := json_serialize(jstr);
-println(json_deserialize(obj.res, 4));
+obj := json_deserialize(jstr);
+println(json_serialize(obj.res, 4));
 println("\nfirst log message: ", obj.res["logs"][0]["message"]);
-println("\nlast order: ", json_deserialize(obj.res["orders"][len(obj.res["orders"])-1], 4));
+println("\nlast order: ", json_serialize(obj.res["orders"][len(obj.res["orders"])-1], 4));

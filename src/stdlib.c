@@ -75,7 +75,7 @@ void val_sprint(Val v, StringBuilder *sb, int depth) {
 	}
 }
 
-void JsonDeserializeF(
+void JsonSerializeF(
 	StringBuilder *sb,
 	Val v,
 	long long intend,
@@ -102,7 +102,7 @@ void JsonDeserializeF(
 
 		da_foreach (Val, it, VLIST(v)) {
 			ADD_INTENDATION();
-			JsonDeserializeF(sb, *it, intend, spaces);
+			JsonSerializeF(sb, *it, intend, spaces);
 			if (it - VLIST(v)->items != VLIST(v)->count - 1) {
 				if (spaces == 0) sb_appendf(sb, ", ");
 				else             sb_appendf(sb, ",\n");
@@ -128,9 +128,9 @@ void JsonDeserializeF(
 
 		ht_foreach_node (ValDict, dict, kv) {
 			ADD_INTENDATION();
-			JsonDeserializeF(sb, kv->key, intend, spaces);
+			JsonSerializeF(sb, kv->key, intend, spaces);
 			sb_appendf(sb, ": ");
-			JsonDeserializeF(sb, kv->val, intend, spaces);
+			JsonSerializeF(sb, kv->val, intend, spaces);
 			if (count++ < dict->count - 1) {
 				if (spaces == 0) sb_appendf(sb, ", ");
 				else             sb_appendf(sb, ",\n");
@@ -148,7 +148,7 @@ void JsonDeserializeF(
 #undef ADD_INTENDATION
 }
 
-Val JsonDeserialize(EvalCtx *ctx, Location cloc, Vals args) {
+Val JsonSerialize(EvalCtx *ctx, Location cloc, Vals args) {
 	if (args.count < 1 || args.count > 2)
 		err(ctx, cloc, "accepts only 1 or 2 arguments");
 
@@ -160,7 +160,7 @@ Val JsonDeserialize(EvalCtx *ctx, Location cloc, Vals args) {
 	if (two_args) spaces = args.items[1].as.vint;
 
 	Val str = eval_make_val(ctx, VAL_STR);
-	JsonDeserializeF(VSTR(str), args.items[0], 0, spaces);
+	JsonSerializeF(VSTR(str), args.items[0], 0, spaces);
 	return str;
 }
 
@@ -287,7 +287,7 @@ Val parse_json(JsonParserCtx *ctx) {
 	return json_err(ctx, "unexpected token");
 }
 
-Val JsonSerialize(EvalCtx *ctx, Location cloc, Vals args) {
+Val JsonDeserialize(EvalCtx *ctx, Location cloc, Vals args) {
 	if (args.count != 1)
 		err(ctx, cloc, "accepts only 1 argument");
 
