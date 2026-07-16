@@ -210,12 +210,10 @@ AST *dict(Parser *p) {
 			default: {
 				AST *ex = expr(p, PARSE_EXPR_ARGS);
 				if (p->err_ctx.got_err) return NULL;
-
-				if (ex->kind != AST_BIN_EXPR && ex->as.bin_expr.op != AST_OP_PAIR) {
+				if (ex->kind != AST_BIN_EXPR || ex->as.bin_expr.op != AST_OP_PAIR) {
 					parser_error(p, ex->loc, "key-value pair expected");
 					return NULL;
 				}
-
 				da_append(&dict->as.dict, ex);
 				if (peek(p).kind != TOK_CBRA && peek(p).kind != TOK_COM) {
 					parser_error(p, peek(p).loc, "invalid expression");
@@ -727,7 +725,6 @@ AST *expr(Parser *p, ParseExprKind pek) {
 					parser_error(p, peek(p).loc, peek(p).data);
 					return NULL;
 				}
-
 				parser_error(p, peek(p).loc, "invalid expression");
 				return NULL;
 			}
@@ -771,7 +768,6 @@ AST *scope_body(Parser *p, bool isProg, bool skipScope) {
 			parser_error(p, peek(p).loc, "invalid body declaration");
 			return NULL;
 		}
-
 		if (peek(p).kind == TOK_ARROW)
 			isArr = true;
 		else if (peek(p).kind == TOK_ARROW_EQ)

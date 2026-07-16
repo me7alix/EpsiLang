@@ -306,7 +306,7 @@ Token lexer_next(Lexer *l) {
 							goto exit;
 						}
 					} else if (chp(l) == '\0') {
-						ret = token(l, TOK_ID, "unclosed string");
+						ret = token(l, TOK_ERR, "unclosed string");
 						break;
 					} else {
 						sb_append(&sb, chp(l));
@@ -343,7 +343,7 @@ Token lexer_next(Lexer *l) {
 
 				chn(l);
 				if (chp(l) != '\'') {
-					ret = token(l, TOK_ID, "' expected");
+					ret = token(l, TOK_ERR, "' expected");
 				}
 			}
 

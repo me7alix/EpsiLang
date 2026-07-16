@@ -120,7 +120,7 @@ u64 ValDict_hashf(Val key) {
 	switch (key.kind) {
 		case VAL_NONE:  return 0;
 		case VAL_INT:   return hash_num(key.as.vint);
-		case VAL_FLOAT: return hash_num(key.as.vint);
+		case VAL_FLOAT: return hash_num(key.as.vfloat);
 		case VAL_BOOL:  return hash_num(key.as.vbool);
 		case VAL_FIELD: return hash_str(key.as.field);
 		case VAL_STR:   return hash_str(VSTR(key)->items);
@@ -381,7 +381,7 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 		if (!val) return VNONE;
 		return *val;
 	} else if (lk == VAL_LIST && rk == VAL_INT && op == AST_OP_ARR) {
-		if (rv.as.vint < 0) rv.as.vint += VSTR(lv)->count;
+		if (rv.as.vint < 0) rv.as.vint += VLIST(lv)->count;
 		check_index(ctx, n->loc, rv.as.vint, VLIST(lv)->count);
 		if (ctx->err_ctx.got_err) return VNONE;
 		return da_get(VLIST(lv), rv.as.vint);
@@ -453,7 +453,7 @@ Val eval_unop(EvalCtx *ctx, AST *n) {
 	if (ctx->err_ctx.got_err) return VNONE;
 
 	if (v.kind != VAL_INT && v.kind != VAL_FLOAT && v.kind != VAL_BOOL) {
-		eval_error(ctx, n->as.bin_expr.lhs->loc, INVALID_COMB);
+		eval_error(ctx, n->as.un_expr.v->loc, INVALID_COMB);
 		return VNONE;
 	}
 

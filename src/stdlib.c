@@ -151,14 +151,11 @@ void JsonSerializeF(
 Val JsonSerialize(EvalCtx *ctx, Location cloc, Vals args) {
 	if (args.count < 1 || args.count > 2)
 		err(ctx, cloc, "accepts only 1 or 2 arguments");
-
 	bool two_args = args.count == 2;
-	if (two_args == 2 && args.items[1].kind != VAL_INT)
+	if (two_args && args.items[1].kind != VAL_INT)
 		err(ctx, cloc, "int expected as second argument");
-
-	long long spaces = 0;
+	long long spaces = 2;
 	if (two_args) spaces = args.items[1].as.vint;
-
 	Val str = eval_make_val(ctx, VAL_STR);
 	JsonSerializeF(VSTR(str), args.items[0], 0, spaces);
 	return str;
@@ -616,14 +613,11 @@ Val Error(EvalCtx *ctx, Location cloc, Vals args) {
 
 Val Print(EvalCtx *ctx, Location cloc, Vals args) {
 	StringBuilder sb = {0};
-
-	da_foreach (Val, it, &args) {
+	da_foreach (Val, it, &args)
 		val_sprint(*it, &sb, 0);
-	}
-
-	printf("%s", sb.items);
+	if (sb.items)
+		printf("%s", sb.items);
 	da_free(&sb);
-
 	return VNONE;
 }
 
@@ -634,16 +628,15 @@ Val Println(EvalCtx *ctx, Location cloc, Vals args) {
 }
 
 Val Input(EvalCtx *ctx, Location cloc, Vals args) {
+	if (args.count != 0)
+		err(ctx, cloc, "accepts only 1 argument");
 	if (args.items[0].kind != VAL_STR)
 		err(ctx, cloc, "accepts only string");
-
 	char res[1 << 12];
 	Val str = eval_make_val(ctx, VAL_STR);
-
 	printf("%s", VSTR(args.items[0])->items);
 	if (fgets(res, sizeof res, stdin) == NULL)
 		err(ctx, cloc, "no input");
-
 	res[strlen(res) - 1] = '\0';
 	sb_appendf(VSTR(str), "%s", res);
 	return str;
