@@ -1,7 +1,7 @@
 fn lexer_new(str) {
 	return {
-		.stream = str,
-		.count = 0,
+		.stream: str,
+		.count: 0,
 	};
 }
 
@@ -26,8 +26,8 @@ fn lexer_chp2(l) {
 
 fn token(kind, data) {
 	return {
-		.kind = kind,
-		.data = data,
+		.kind: kind,
+		.data: data,
 	};
 }
 

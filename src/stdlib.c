@@ -618,7 +618,7 @@ Val Println(EvalCtx *ctx, Location cloc, Vals args) {
 }
 
 Val Input(EvalCtx *ctx, Location cloc, Vals args) {
-	if (args.count != 0)
+	if (args.count != 1)
 		err(ctx, cloc, "accepts only 1 argument");
 	if (args.items[0].kind != VAL_STR)
 		err(ctx, cloc, "accepts only string");
