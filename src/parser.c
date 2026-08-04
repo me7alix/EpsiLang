@@ -796,7 +796,7 @@ AST *scope_body(Parser *p, bool isProg, bool skipScope) {
 					.lexer = lexer_from_file(&ip.arena, peek(p).data),
 				};
 
-				if (!ip.lexer.cur_char) {
+				if (!ip.lexer.stream) {
 					parser_error(p, peek(p).loc, "no such file");
 					p->err_ctx.got_err = true;
 					return NULL;

@@ -8,26 +8,26 @@
 #include "../3dparty/utf8.h"
 
 char *read_file(const char *filename);
-static char  chp(Lexer *l) { return *l->cur_char;   }
-static char  chn(Lexer *l) { return *l->cur_char++; }
-static char *chl(Lexer *l) { return  l->cur_char;   }
+static char  chp(Lexer *l) { return *l->stream;   }
+static char  chn(Lexer *l) { return *l->stream++; }
+static char *chl(Lexer *l) { return  l->stream;   }
 
 char *dup(Lexer *l, char *str) {
 	return arena_strdup(l->arena, str);
 }
 
 char *get_word(Lexer *lexer) {
-	while (*lexer->cur_char == ' ')
-		lexer->cur_char++;
+	while (*lexer->stream == ' ')
+		lexer->stream++;
 
-	char *start = lexer->cur_char;
-	while (isalpha(*lexer->cur_char) ||
-		isdigit(*lexer->cur_char) ||
-		*lexer->cur_char == '_')
-		lexer->cur_char++;
-	lexer->cur_char--;
+	char *start = lexer->stream;
+	while (isalpha(*lexer->stream) ||
+		isdigit(*lexer->stream) ||
+		*lexer->stream == '_')
+		lexer->stream++;
+	lexer->stream--;
 
-	size_t l = lexer->cur_char - start + 1;
+	size_t l = lexer->stream - start + 1;
 	char *word = arena_alloc(lexer->arena, sizeof(char) * (l+1));
 	memcpy(word, start, l);
 	word[l] = '\0';
@@ -38,21 +38,16 @@ Token token(Lexer *lexer, TokenKind kind, char *data) {
 	return (Token) {
 		.kind = kind,
 		.data = data,
-		.loc = lexer->cur_loc,
+		.loc = lexer->loc,
 	};
 }
 
 bool is_tok(Lexer *lexer, const char *tok) {
-	char *str = lexer->cur_char;
-
-	for (size_t i = 0; i < strlen(tok); i++) {
+	char *str = lexer->stream;
+	for (size_t i = 0; i < strlen(tok); i++)
 		if (tok[i] != str[i]) return false;
-	}
-
-	if (isalpha(str[strlen(tok)]) || str[strlen(tok)] == '_') {
+	if (isalpha(str[strlen(tok)]) || str[strlen(tok)] == '_')
 		return false;
-	}
-
 	return true;
 }
 
@@ -64,11 +59,11 @@ Lexer lexer_from_str(Arena *arena, char *file, char *code) {
 	return (Lexer) {
 		.arena = arena,
 		.memory = memory,
-		.cur_loc.file = file,
-		.cur_loc.line_num = 0,
-		.cur_loc.line_start = memory,
-		.cur_loc.line_char = memory,
-		.cur_char = memory,
+		.loc.file = file,
+		.loc.line_num = 0,
+		.loc.line_start = memory,
+		.loc.line_char = memory,
+		.stream = memory,
 	};
 }
 
@@ -77,11 +72,11 @@ Lexer lexer_from_file(Arena *arena, char *file) {
 	return (Lexer) {
 		.arena = arena,
 		.memory = code,
-		.cur_loc.file = file,
-		.cur_loc.line_num = 0,
-		.cur_loc.line_start = code,
-		.cur_loc.line_char = code,
-		.cur_char = code,
+		.loc.file = file,
+		.loc.line_num = 0,
+		.loc.line_start = code,
+		.loc.line_char = code,
+		.stream = code,
 	};
 }
 
@@ -110,8 +105,8 @@ struct {
 
 Token lexer_next(Lexer *l) {
 	Token ret;
-	l->cur_loc.line_char = l->cur_char;
-	ret.loc = l->cur_loc;
+	l->loc.line_char = l->stream;
+	ret.loc = l->loc;
 
 	switch (chp(l)) {
 		case ' ':
@@ -216,8 +211,8 @@ Token lexer_next(Lexer *l) {
 			if (chl(l)[0] == '\r' && chl(l)[1] == '\n')
 				chn(l);
 			chn(l);
-			l->cur_loc.line_num++;
-			l->cur_loc.line_start = chl(l);
+			l->loc.line_num++;
+			l->loc.line_start = chl(l);
 			return lexer_next(l);
 		} break;
 
@@ -246,22 +241,18 @@ Token lexer_next(Lexer *l) {
 					ret = token(l, TOK_ERR, "invalid rune");
 					goto exit;
 				}
-
 				char str[5]; sprintf(str, "%c", ch);
 				ret = token(l, TOK_CHAR, dup(l, str));
 				chn(l);
 			} else {
 				size_t bytes_read;
 				utf8_decode(chl(l), &bytes_read);
-
 				char *chr = arena_alloc(l->arena, bytes_read + 1);
 				memcpy(chr, chl(l), bytes_read);
 				chr[bytes_read] = '\0';
-
 				ret = token(l, TOK_CHAR, chr);
 				for (size_t i = 0; i < bytes_read; i++) chn(l);
 			}
-
 			if (chl(l)[0] != '\'') {
 				ret = token(l, TOK_ERR, "rune should be closed with '");
 			}
@@ -290,7 +281,6 @@ Token lexer_next(Lexer *l) {
 			else if (chp(l) == '"') {
 				StringBuilder sb = {.arena = l->arena};
 				chn(l);
-
 				while (chl(l)[0] != '\"') {
 					if (chl(l)[0] == '\\') {
 						chn(l);
@@ -311,7 +301,6 @@ Token lexer_next(Lexer *l) {
 					} else {
 						sb_append(&sb, chp(l));
 					}
-
 					chn(l);
 				}
 
@@ -356,7 +345,6 @@ Token lexer_next(Lexer *l) {
 						goto exit;
 					}
 				}
-
 				ret = token(l, TOK_ID, get_word(l));
 			}
 

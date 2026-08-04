@@ -19,29 +19,18 @@ EpslCtx *epsl_from_str(EpslErrorFn errf, char *code) {
 		.lexer = lexer_from_str(&ctx->parser.arena, "script", code),
 		.err_ctx.errf = (ErrorFn) errf,
 	};
-
-	ctx->eval_ctx = (EvalCtx){
-		.err_ctx.errf = (ErrorFn) errf,
-	};
-
+	ctx->eval_ctx = (EvalCtx){.err_ctx.errf = (ErrorFn) errf};
 	reg_stdlib(&ctx->eval_ctx);
 	return ctx;
 }
 
 EpslCtx *epsl_from_file(EpslErrorFn errf, char *filename) {
 	EpslCtxR *ctx = malloc(sizeof(EpslCtxR));
-	ctx->parser = (Parser){
-		.err_ctx.errf = (ErrorFn) errf,
-	};
-
+	ctx->parser = (Parser){.err_ctx.errf = (ErrorFn) errf};
 	Lexer lex = lexer_from_file(&ctx->parser.arena, filename);
-	if (!lex.cur_char) return NULL;
+	if (!lex.stream) return NULL;
 	ctx->parser.lexer = lex;
-
-	ctx->eval_ctx = (EvalCtx){
-		.err_ctx.errf = (ErrorFn) errf,
-	};
-
+	ctx->eval_ctx = (EvalCtx){.err_ctx.errf = (ErrorFn) errf};
 	reg_stdlib(&ctx->eval_ctx);
 	return ctx;
 }
@@ -69,12 +58,10 @@ EpslResult epsl_eval(EpslCtx *ctx) {
 	AST *ast = parse(&r->parser);
 	if (r->parser.err_ctx.got_err)
 		return (EpslResult){.got_err = true};
-
 	EpslVal erv;
 	Val rv = eval(&r->eval_ctx, ast);
 	if (r->eval_ctx.err_ctx.got_err)
 		return (EpslResult){.got_err = true};
-
 	memcpy(&erv, &rv, sizeof(rv));
 	return (EpslResult){
 		.val = erv,

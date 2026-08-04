@@ -57,8 +57,8 @@ typedef struct {
 
 typedef struct {
 	char *memory;
-	char *cur_char;
-	Location cur_loc;
+	char *stream;
+	Location loc;
 	Arena *arena;
 } Lexer;
 

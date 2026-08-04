@@ -99,7 +99,6 @@ void JsonSerializeF(
 		sb_appendf(sb, "[");
 		if (spaces != 0)
 			sb_appendf(sb, "\n");
-
 		da_foreach (Val, it, VLIST(v)) {
 			ADD_INTENDATION();
 			JsonSerializeF(sb, *it, intend, spaces);
@@ -108,10 +107,8 @@ void JsonSerializeF(
 				else             sb_appendf(sb, ",\n");
 			}
 		}
-
 		if (spaces != 0)
 			sb_appendf(sb, "\n");
-
 		intend -= spaces;
 		ADD_INTENDATION();
 		sb_appendf(sb, "]");
@@ -120,12 +117,10 @@ void JsonSerializeF(
 	case VAL_DICT: {
 		ValDict *dict = VDICT(v);
 		size_t count = 0;
-
 		intend += spaces;
 		sb_appendf(sb, "{");
 		if (spaces != 0)
 			sb_appendf(sb, "\n");
-
 		ht_foreach_node (ValDict, dict, kv) {
 			ADD_INTENDATION();
 			JsonSerializeF(sb, kv->key, intend, spaces);
@@ -136,10 +131,8 @@ void JsonSerializeF(
 				else             sb_appendf(sb, ",\n");
 			}
 		}
-
 		if (spaces != 0)
 			sb_appendf(sb, "\n");
-
 		intend -= spaces;
 		ADD_INTENDATION();
 		sb_appendf(sb, "}");
@@ -178,16 +171,13 @@ Val json_obj(JsonParserCtx *ctx, Val res) {
 
 Val json_err(JsonParserCtx *ctx, char *msg) {
 	ctx->got_err = true;
-
 	Val err     = eval_make_val(ctx->ectx, VAL_DICT);
 	Val res_fld = {.kind = VAL_FIELD, .as.field = "res"};
 	Val err_fld = {.kind = VAL_FIELD, .as.field = "err"};
 	Val err_msg = eval_make_val(ctx->ectx, VAL_STR);
-
-	size_t lines = ctx->lex->cur_loc.line_num + 1;
-	size_t chars = ctx->lex->cur_loc.line_char - ctx->lex->cur_loc.line_start + 1;
+	size_t lines = ctx->lex->loc.line_num + 1;
+	size_t chars = ctx->lex->loc.line_char - ctx->lex->loc.line_start + 1;
 	sb_appendf(VSTR(err_msg), "%zu:%zu: %s", lines, chars, msg);
-
 	ValDict_add(VDICT(err), res_fld, VNONE);
 	ValDict_add(VDICT(err), err_fld, err_msg);
 	return err;
