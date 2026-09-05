@@ -42,7 +42,6 @@ typedef struct {
 		LITERAL_STR,
 		LITERAL_RUNE,
 	} kind;
-
 	union {
 		double vfloat;
 		long long vint;
@@ -63,7 +62,6 @@ typedef struct {
 		AST_SBL_VAR,
 		AST_SBL_FUNC,
 	} kind;
-
 	AST_Var var;
 } AST_Symbol;
 

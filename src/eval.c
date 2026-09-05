@@ -103,7 +103,6 @@ Val eval_make_val(EvalCtx *ctx, int kind) {
 		.kind = kind,
 		.as.gc_obj = eval_gc_alloc(ctx, kind),
 	};
-
 	eval_temp_stack_append(ctx, hv);
 	return hv;
 }
@@ -128,10 +127,8 @@ u64 ValDict_hashf(Val key) {
 
 		case VAL_LIST: {
 			u64 hash = 0;
-			da_foreach (Val, v, VLIST(key)) {
+			da_foreach (Val, v, VLIST(key))
 				hash_combine(hash, ValDict_hashf(*v));
-			}
-
 			return hash;
 		} break;
 
@@ -141,7 +138,6 @@ u64 ValDict_hashf(Val key) {
 				hash_combine(hash, ValDict_hashf(n->key));
 				hash_combine(hash, ValDict_hashf(n->val));
 			}
-
 			return hash;
 		} break;
 	}
@@ -162,25 +158,22 @@ int ValDict_compare(Val a, Val b) {
 		case VAL_LIST: {
 			if (VLIST(a)->count != VLIST(b)->count)
 				return 1;
-
 			for (size_t i = 0; i < VLIST(a)->count; i++) {
-				if (ValDict_compare(VLIST(a)->items[i], VLIST(b)->items[i]) != 0)
+				if (ValDict_compare(VLIST(a)->items[i], VLIST(b)->items[i]) != 0) {
 					return 1;
+				}
 			}
-
 			return 0;
 		} break;
 
 		case VAL_DICT: {
 			if (VDICT(a)->count != VDICT(b)->count)
 				return 1;
-
 			ht_foreach_node (ValDict, VDICT(a), n) {
 				Val *bv = ValDict_get(VDICT(b), n->key);
 				if (!bv) return 1;
 				if (ValDict_compare(n->val, *bv) != 0) return 1;
 			}
-
 			return 0;
 		} break;
 	}
@@ -424,14 +417,10 @@ Val eval_binop(EvalCtx *ctx, AST *n) {
 
 size_t val_get_count(Val coll) {
 	switch (coll.kind) {
-	case VAL_LIST:
-		return VLIST(coll)->count;
-	case VAL_STR:
-		return utf8_len(VSTR(coll)->items);
-	case VAL_DICT:
-		return VDICT(coll)->count;
-	default:
-		return 0;
+		case VAL_LIST: return VLIST(coll)->count;
+		case VAL_STR:  return utf8_len(VSTR(coll)->items);
+		case VAL_DICT: return VDICT(coll)->count;
+		default:       return 0;
 	}
 }
 
@@ -462,17 +451,14 @@ Val eval_unop(EvalCtx *ctx, AST *n) {
 			.kind = VAL_FLOAT,
 			.as.vfloat = unop(ctx, n->loc, op, vget(v)),
 		};
-
 		case VAL_INT: return (Val){
 			.kind = VAL_INT,
 			.as.vint = unop(ctx, n->loc, op, vget(v)),
 		};
-
 		case VAL_BOOL: return (Val){
 			.kind = VAL_BOOL,
 			.as.vbool = unop(ctx, n->loc, op, vget(v)),
 		};
-
 		default: assert(0);
 	}
 }
@@ -649,7 +635,8 @@ Val eval(EvalCtx *ctx, AST *n) {
 								ctx, n->loc,
 								n->as.bin_expr.op,
 								*dict_val,
-								rhs_val);
+								rhs_val
+							);
 						}
 					}
 				} else if (lhs->kind == AST_VAR) {
@@ -771,11 +758,9 @@ Val eval(EvalCtx *ctx, AST *n) {
 				size_t count = val_get_count(coll);
 				for (size_t i = 0; i < count; i++) {
 					count = val_get_count(coll);
-					switch (coll.kind) {
-					case VAL_LIST:
+					if (coll.kind == VAL_LIST) {
 						x = VLIST(coll)->items[i];
-						break;
-					case VAL_STR:
+					} else if (coll.kind == VAL_STR) {
 						x = (Val){
 							.kind = VAL_RUNE,
 							.as.vrune = utf8_get_nth(VSTR(coll)->items, i),
@@ -1056,7 +1041,7 @@ void gc_obj_mark(GC_Object *obj) {
 }
 
 void eval_collect_garbage(EvalCtx *ctx) {
-	// mark phase
+	/* Mark phase */
 	da_foreach (GC_Object*, obj, &ctx->gc.alive_objs) {
 		(*obj)->marked = false;
 	}
@@ -1071,7 +1056,7 @@ void eval_collect_garbage(EvalCtx *ctx) {
 		gc_obj_mark(val->as.gc_obj);
 	}
 
-	// sweep phase
+	/* Sweep phase */
 	for (size_t i = 0; i < ctx->gc.alive_objs.count; i++) {
 		GC_Object *obj = da_get(&ctx->gc.alive_objs, i);
 		if (obj->marked) {

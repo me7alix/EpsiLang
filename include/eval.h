@@ -46,7 +46,6 @@ struct Val {
 		VAL_CUSTOM,
 		_VAL_FUNC,
 	} kind;
-
 	union {
 		long long vint;
 		double vfloat;
@@ -73,7 +72,6 @@ typedef struct {
 		REG_VAR,
 		REG_FUNC,
 	} kind;
-
 	union {
 		struct {
 			bool is_const;
@@ -99,7 +97,6 @@ struct EvalCtx {
 		EVAL_CTX_BREAK,
 		EVAL_CTX_CONT,
 	} state;
-
 	GarbageCollector gc;
 	RegSymbols reg_sbls;
 	DA(EvalVar) var_stack;

@@ -1,12 +1,13 @@
 build_debug_mode; // when true, doesn't execute commands
 
+if build_debug_mode {
+	println("DEBUG MODE");
+}
+
 if _OS_ != "WINDOWS" and _OS_ != "LINUX" and _OS_ != "APPLE" {
 	println("OS is not supported");
 	exit(1);
 }
-
-if build_debug_mode do
-	println("DEBUG MODE");
 
 fn join(arr) {
 	res := "";
@@ -14,32 +15,29 @@ fn join(arr) {
 		append(res, arr[i]);
 		if i < len(arr) - 1 do append(res, " ");
 	}
-
 	return res;
 }
 
 fn path(...) {
 	res := "";
 	del := "";
-
 	for i := 0; i < len(_VA_ARGS_); i+=1 {
 		append(res, _VA_ARGS_[i]);
-
 		if _OS_ == "LINUX" or _OS_ == "APPLE" do del = "/";
 		else if _OS_ == "WINDOWS"             do del = "\\";
-
-		if i < len(_VA_ARGS_) - 1 do
+		if i < len(_VA_ARGS_) - 1 {
 			append(res, del);
+		}
 	}
-
 	return res;
 }
 
 fn cmd(...) {
 	command := join(_VA_ARGS_);
 	println("[CMD] ", command);
-	if !build_debug_mode =>
-		system(command);
+	if !build_debug_mode {
+		return system(command);
+	}
 }
 
 fn make_dir(dir_name) {

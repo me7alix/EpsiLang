@@ -31,7 +31,6 @@ AST_Var symbol_table_get(Parser *p, int kind, char *id) {
 			return p->symbols.items[i].var;
 		}
 	}
-
 	return (AST_Var){id, 0, 0};
 }
 
@@ -43,7 +42,6 @@ AST_Var symbol_table_add(Parser *p, Location loc, int kind, char *id) {
 			return (AST_Var){0};
 		}
 	}
-
 	size_t stack_base = stack_ptrs[stack_ptr - 1];
 	uint idx = (uint)(p->symbols.count - stack_base);
 	AST_Var var = {id, vid++, idx};
@@ -64,7 +62,6 @@ void expect_f(Parser *p, TokenKind tk, char *tok_str) {
 		parser_error(p, peek(p).loc, peek(p).data);
 		return;
 	}
-
 	if (peek(p).kind != tk) {
 		char err[1024];
 		sprintf(err, "%s expected", tok_str);
